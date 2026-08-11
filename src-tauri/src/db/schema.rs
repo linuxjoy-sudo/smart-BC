@@ -34,6 +34,18 @@ pub fn migrate(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
             conversation_id INTEGER NOT NULL REFERENCES conversations(id),
             created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
         );
+        CREATE TABLE IF NOT EXISTS reminders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            due_at TEXT,
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','done','expired')),
+            needs_time INTEGER NOT NULL DEFAULT 0,
+            conversation_id INTEGER NOT NULL REFERENCES conversations(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            notified_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at);
         "#,
     )
 }

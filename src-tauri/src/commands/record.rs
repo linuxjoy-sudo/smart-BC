@@ -37,7 +37,11 @@ pub fn process_audio_full(
         Ok(ext) => {
             crate::db::memories::save_extraction(conn, &ext, result.conversation_id)
                 .map_err(|e| format!("记忆入库失败: {e}"))?;
-            // 承诺在 Task 11 接入提醒表
+            if !ext.reminders.is_empty() {
+                let now = chrono::Local::now().naive_local();
+                crate::db::reminders::save_reminders(conn, &ext.reminders, result.conversation_id, now)
+                    .map_err(|e| format!("承诺入库失败: {e}"))?;
+            }
             eprintln!("extracted {} people, {} reminders", ext.people.len(), ext.reminders.len());
         }
         Err(e) => eprintln!("抽取失败（原文已入库）: {e}"),
