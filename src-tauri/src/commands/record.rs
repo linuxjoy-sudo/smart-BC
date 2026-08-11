@@ -1,4 +1,6 @@
 use crate::app_state::AppState;
+use crate::llm::provider::LlmProvider;
+use crate::memory::extract::extract_from_transcript;
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -21,6 +23,26 @@ pub fn store_transcript(
     let id = crate::db::conversations::insert_conversation(conn, t, audio_path)
         .map_err(|e| format!("入库失败: {e}"))?;
     Ok(RecordResult { conversation_id: id, transcript: t.to_string() })
+}
+
+pub fn process_audio_full(
+    conn: &Connection,
+    provider: &dyn LlmProvider,
+    transcriber: &crate::asr::whisper::Transcriber,
+    wav_path: &std::path::Path,
+) -> Result<RecordResult, String> {
+    let transcript = transcriber.transcribe(wav_path)?;
+    let result = store_transcript(conn, &transcript, Some(wav_path.to_str().unwrap()))?;
+    match extract_from_transcript(provider, &transcript) {
+        Ok(ext) => {
+            crate::db::memories::save_extraction(conn, &ext, result.conversation_id)
+                .map_err(|e| format!("记忆入库失败: {e}"))?;
+            // 承诺在 Task 11 接入提醒表
+            eprintln!("extracted {} people, {} reminders", ext.people.len(), ext.reminders.len());
+        }
+        Err(e) => eprintln!("抽取失败（原文已入库）: {e}"),
+    }
+    Ok(result)
 }
 
 #[tauri::command]

@@ -22,11 +22,15 @@ pub fn run() {
     std::fs::create_dir_all(&data_dir).expect("create data dir");
     let db_path = data_dir.join("smartbc.db");
     let conn = db::open(&db_path).expect("open db");
+    let api_key = std::env::var("DEEPSEEK_API_KEY").unwrap_or_default();
+    let llm: Arc<dyn llm::provider::LlmProvider + Send + Sync> =
+        Arc::new(llm::client::DeepSeekClient::new(&api_key));
     let state = AppState {
         conn: Arc::new(Mutex::new(conn)),
         recorder: Arc::new(Mutex::new(None)),
         transcriber: Arc::new(Mutex::new(None)),
         data_dir,
+        llm,
     };
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
