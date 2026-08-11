@@ -5,6 +5,7 @@ export interface ConversationRow { id: number; created_at: string; transcript: s
 export interface ReminderRow { id: number; content: string; due_at: string | null; status: string; needs_time: boolean; conversation_id: number; }
 export interface PersonRow { id: number; name: string; relation: string; note: string; conversation_id: number; }
 export interface PreferenceRow { id: number; topic: string; value: string; conversation_id: number; }
+export interface Config { api_key: string; }
 
 export const api = {
   ping: () => invoke<string>("ping"),
@@ -17,4 +18,9 @@ export const api = {
   listPeople: () => invoke<PersonRow[]>("list_people_cmd"),
   listPreferences: () => invoke<PreferenceRow[]>("list_preferences_cmd"),
   completeReminder: (id: number) => invoke<void>("complete_reminder", { id }),
+  saveApiKey: (key: string) => invoke<void>("save_api_key", { key }),
+  getConfig: () => invoke<Config>("get_config"),
+  clearAllData: () => invoke<void>("clear_all_data"),
+  exportAll: (dest: string) => invoke<string>("export_all", { dest }),
+  exportDir: () => invoke<string>("export_dir"),
 };

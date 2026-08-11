@@ -2,6 +2,7 @@ pub mod app_state;
 pub mod asr;
 pub mod audio;
 pub mod commands;
+pub mod config;
 pub mod db;
 pub mod llm;
 pub mod memory;
@@ -26,9 +27,11 @@ pub fn run() {
     std::fs::create_dir_all(&data_dir).expect("create data dir");
     let db_path = data_dir.join("smartbc.db");
     let conn = db::open(&db_path).expect("open db");
-    let api_key = std::env::var("DEEPSEEK_API_KEY").unwrap_or_default();
-    let llm: Arc<dyn llm::provider::LlmProvider + Send + Sync> =
-        Arc::new(llm::client::DeepSeekClient::new(&api_key));
+    let api_key = config::load_api_key(&data_dir).unwrap_or_default();
+    let llm = Arc::new(Mutex::new(
+        Arc::new(llm::client::DeepSeekClient::new(&api_key))
+            as Arc<dyn llm::provider::LlmProvider + Send + Sync>
+    ));
     let state = AppState {
         conn: Arc::new(Mutex::new(conn)),
         recorder: Arc::new(Mutex::new(None)),
@@ -57,7 +60,13 @@ pub fn run() {
             commands::query::list_reminders_cmd,
             commands::query::list_people_cmd,
             commands::query::list_preferences_cmd,
-            commands::query::complete_reminder
+            commands::query::complete_reminder,
+            commands::settings::save_api_key,
+            commands::settings::get_config,
+            commands::settings::delete_conversation,
+            commands::settings::clear_all_data,
+            commands::settings::export_all,
+            commands::settings::export_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

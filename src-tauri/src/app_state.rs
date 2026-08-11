@@ -10,5 +10,5 @@ pub struct AppState {
     pub recorder: Arc<Mutex<Option<Recorder>>>,
     pub transcriber: Arc<Mutex<Option<Transcriber>>>,
     pub data_dir: PathBuf,
-    pub llm: Arc<dyn crate::llm::provider::LlmProvider + Send + Sync>,
+    pub llm: Arc<Mutex<Arc<dyn crate::llm::provider::LlmProvider + Send + Sync>>>,
 }

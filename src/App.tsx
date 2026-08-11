@@ -5,8 +5,9 @@ import HistoryPage from "./pages/HistoryPage";
 import QueryPage from "./pages/QueryPage";
 import PeoplePage from "./pages/PeoplePage";
 import RemindersPage from "./pages/RemindersPage";
+import SettingsPage from "./pages/SettingsPage";
 
-const TABS = ["录音", "历史", "回忆", "人脉", "承诺"] as const;
+const TABS = ["录音", "历史", "回忆", "人脉", "承诺", "设置"] as const;
 
 export default function App() {
   const [tab, setTab] = useState(0);
@@ -30,6 +31,7 @@ export default function App() {
         {tab === 2 && <QueryPage />}
         {tab === 3 && <PeoplePage />}
         {tab === 4 && <RemindersPage />}
+        {tab === 5 && <SettingsPage />}
       </div>
     </div>
   );
