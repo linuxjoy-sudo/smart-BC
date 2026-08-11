@@ -52,7 +52,12 @@ pub fn run() {
             commands::record::start_recording,
             commands::record::stop_recording,
             commands::record::get_transcription_status,
-            commands::query::query_memories
+            commands::query::query_memories,
+            commands::query::list_conversations,
+            commands::query::list_reminders_cmd,
+            commands::query::list_people_cmd,
+            commands::query::list_preferences_cmd,
+            commands::query::complete_reminder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

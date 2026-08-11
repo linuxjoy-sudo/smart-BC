@@ -1,9 +1,36 @@
-import { invoke } from "@tauri-apps/api/core";
+import { useState } from "react";
+import "./styles.css";
+import RecordPage from "./pages/RecordPage";
+import HistoryPage from "./pages/HistoryPage";
+import QueryPage from "./pages/QueryPage";
+import PeoplePage from "./pages/PeoplePage";
+import RemindersPage from "./pages/RemindersPage";
+
+const TABS = ["录音", "历史", "回忆", "人脉", "承诺"] as const;
 
 export default function App() {
+  const [tab, setTab] = useState(0);
+
   return (
-    <button onClick={async () => alert(await invoke<string>("ping"))}>
-      测试连接
-    </button>
+    <div className="app">
+      <nav className="tabs">
+        {TABS.map((label, i) => (
+          <button
+            key={label}
+            className={i === tab ? "active" : ""}
+            onClick={() => setTab(i)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <div className="page">
+        {tab === 0 && <RecordPage />}
+        {tab === 1 && <HistoryPage />}
+        {tab === 2 && <QueryPage />}
+        {tab === 3 && <PeoplePage />}
+        {tab === 4 && <RemindersPage />}
+      </div>
+    </div>
   );
 }
