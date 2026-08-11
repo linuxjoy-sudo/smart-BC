@@ -1,4 +1,6 @@
 pub mod conversations;
+pub mod memories;
+pub mod reminders;
 pub mod schema;
 pub mod search;
 
