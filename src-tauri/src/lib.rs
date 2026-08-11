@@ -6,6 +6,7 @@ pub mod db;
 pub mod llm;
 pub mod memory;
 pub mod query;
+pub mod timeparse;
 
 use app_state::AppState;
 use std::sync::{Arc, Mutex};
