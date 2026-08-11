@@ -3,6 +3,7 @@ pub mod asr;
 pub mod audio;
 pub mod commands;
 pub mod db;
+pub mod llm;
 
 use app_state::AppState;
 use std::sync::{Arc, Mutex};
