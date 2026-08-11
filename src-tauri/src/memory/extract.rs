@@ -48,6 +48,5 @@ pub fn extract_from_transcript(
         "你输出严格 JSON，不要 Markdown 代码块。",
         &build_extract_prompt(transcript),
     )?;
-    parse_extraction(&raw.to_string())
-        .map_err(|e| LlmError::InvalidJson(e))
+    parse_extraction(&raw.to_string()).map_err(LlmError::InvalidJson)
 }

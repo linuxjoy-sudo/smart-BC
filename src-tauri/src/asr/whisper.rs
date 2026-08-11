@@ -31,8 +31,7 @@ impl Transcriber {
         let mut text = String::new();
         for i in 0..state.full_n_segments() {
             if let Some(seg) = state.get_segment(i) {
-                text.push_str(&seg.to_str().map_err(|e| e.to_string())?);
-            }
+                text.push_str(seg.to_str().map_err(|e| e.to_string())?);            }
         }
         Ok(text.trim().to_string())
     }

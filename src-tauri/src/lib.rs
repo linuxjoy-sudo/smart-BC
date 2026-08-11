@@ -23,7 +23,7 @@ fn ping() -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let data_dir = dirs::data_local_dir()
-        .unwrap_or_else(|| std::env::temp_dir())
+        .unwrap_or_else(std::env::temp_dir)
         .join("smartbc");
     std::fs::create_dir_all(&data_dir).expect("create data dir");
     let db_path = data_dir.join("smartbc.db");

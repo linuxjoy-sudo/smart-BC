@@ -2,6 +2,7 @@ use rusqlite::Connection;
 use smart_bc::config;
 use smart_bc::db;
 
+#[allow(dead_code)]
 fn mem_conn() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
     db::schema::migrate(&conn).unwrap();

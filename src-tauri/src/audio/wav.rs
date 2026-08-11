@@ -51,7 +51,7 @@ pub fn read_f32_wav(path: &Path) -> Result<(u32, Vec<f32>), AudioError> {
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|e| AudioError(e.to_string()))?
                 .into_iter()
-                .map(|s| s as f64 / max as f64)
+                .map(|s| s as f64 / max)
                 .map(|s| s as f32)
                 .collect()
         }

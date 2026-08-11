@@ -5,7 +5,7 @@ fn wav_roundtrip_preserves_samples() {
     let dir = std::env::temp_dir().join("smartbc_wav_test");
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("roundtrip.wav");
-    let samples: Vec<f32> = (0..8000).map(|i| (i as f32 / 8000.0 * 3.14159).sin()).collect();
+    let samples: Vec<f32> = (0..8000).map(|i| (i as f32 / 8000.0 * std::f32::consts::PI).sin()).collect();
     write_f32_wav(&path, &samples, 16000).unwrap();
     let (rate, read_back) = read_f32_wav(&path).unwrap();
     assert_eq!(rate, 16000);

@@ -1,6 +1,5 @@
 use rusqlite::Connection;
 use smart_bc::db;
-use smart_bc::query;
 
 fn mem_conn() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
