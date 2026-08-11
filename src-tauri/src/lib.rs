@@ -6,10 +6,12 @@ pub mod db;
 pub mod llm;
 pub mod memory;
 pub mod query;
+pub mod scheduler;
 pub mod timeparse;
 
 use app_state::AppState;
 use std::sync::{Arc, Mutex};
+use tauri::Manager;
 
 #[tauri::command]
 fn ping() -> String {
@@ -37,6 +39,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .manage(state)
+        .setup(|app| {
+            if let Some(state) = app.try_state::<AppState>() {
+                let conn_arc = state.conn.clone();
+                let handle = app.handle().clone();
+                scheduler::spawn(conn_arc, handle);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             ping,
             commands::record::start_recording,
