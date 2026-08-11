@@ -14,6 +14,7 @@ export default function RemindersPage() {
   const complete = async (id: number) => {
     try {
       await api.completeReminder(id);
+      api.logUsage("reminder_clicked").catch(() => {});
       load();
     } catch (e) {
       setErr(String(e));

@@ -8,6 +8,7 @@ pub mod llm;
 pub mod memory;
 pub mod query;
 pub mod scheduler;
+pub mod telemetry;
 pub mod timeparse;
 
 use app_state::AppState;
@@ -66,7 +67,9 @@ pub fn run() {
             commands::settings::delete_conversation,
             commands::settings::clear_all_data,
             commands::settings::export_all,
-            commands::settings::export_dir
+            commands::settings::export_dir,
+            commands::telemetry::log_usage,
+            commands::telemetry::get_usage_stats
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

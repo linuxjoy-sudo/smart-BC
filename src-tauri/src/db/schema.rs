@@ -46,6 +46,11 @@ pub fn migrate(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
             notified_at TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(due_at);
+        CREATE TABLE IF NOT EXISTS usage_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+        );
         "#,
     )
 }

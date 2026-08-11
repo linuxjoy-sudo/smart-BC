@@ -12,6 +12,7 @@ export default function RecordPage() {
       try {
         const r = await api.stopRecording();
         setLast(r.transcript);
+        api.logUsage("recording_done").catch(() => {});
       } catch (e) {
         setLast(`录音失败：${e}`);
       } finally {

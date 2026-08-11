@@ -10,6 +10,7 @@ export default function QueryPage() {
     setBusy(true);
     try {
       setAnswer(await api.queryMemories(q));
+      api.logUsage("query_asked").catch(() => {});
     } catch (e) {
       setAnswer(`查询失败：${e}`);
     } finally {
