@@ -5,6 +5,7 @@ pub mod commands;
 pub mod db;
 pub mod llm;
 pub mod memory;
+pub mod query;
 
 use app_state::AppState;
 use std::sync::{Arc, Mutex};
@@ -39,7 +40,8 @@ pub fn run() {
             ping,
             commands::record::start_recording,
             commands::record::stop_recording,
-            commands::record::get_transcription_status
+            commands::record::get_transcription_status,
+            commands::query::query_memories
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
