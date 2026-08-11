@@ -4,6 +4,7 @@ pub mod audio;
 pub mod commands;
 pub mod db;
 pub mod llm;
+pub mod memory;
 
 use app_state::AppState;
 use std::sync::{Arc, Mutex};
