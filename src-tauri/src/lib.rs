@@ -1,3 +1,5 @@
+pub mod db;
+
 #[tauri::command]
 fn ping() -> String {
     "pong".into()
