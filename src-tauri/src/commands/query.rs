@@ -3,15 +3,23 @@ use crate::db::conversations::ConversationRow;
 use crate::db::memories::{PersonRow, PreferenceRow};
 use crate::db::reminders::ReminderRow;
 use crate::llm::answer;
+use crate::llm::provider::LlmProvider;
 
 #[tauri::command]
 pub fn query_memories(state: tauri::State<'_, AppState>, question: String) -> Result<String, String> {
     let conn = state.conn.lock().unwrap();
-    let ctx = crate::query::search_context(&conn, &question, 8)?;
     let llm = state.llm.lock().unwrap().clone();
-    let answer = answer::answer_question(llm.as_ref(), &question, &ctx.hits, &ctx.people, &ctx.prefs)
-        .map_err(|e| e.to_string())?;
-    Ok(answer)
+    answer_question_core(&conn, llm.as_ref(), &question)
+}
+
+pub fn answer_question_core(
+    conn: &rusqlite::Connection,
+    llm: &dyn LlmProvider,
+    question: &str,
+) -> Result<String, String> {
+    let ctx = crate::query::search_context(conn, question, 8)?;
+    answer::answer_question(llm, question, &ctx.hits, &ctx.people, &ctx.prefs)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
