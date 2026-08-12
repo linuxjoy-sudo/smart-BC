@@ -4,10 +4,39 @@ import { api } from "../api";
 export default function SettingsPage() {
   const [key, setKey] = useState("");
   const [msg, setMsg] = useState("");
+  const [modelReady, setModelReady] = useState(false);
+  const [modelBusy, setModelBusy] = useState(false);
 
   useEffect(() => {
     api.getConfig().then((c) => setKey(c.api_key)).catch((e) => setMsg(String(e)));
+    api.transcriptionReady().then(setModelReady).catch(() => {});
   }, []);
+
+  const loadModel = async () => {
+    setModelBusy(true);
+    try {
+      await api.loadModel();
+      setModelReady(true);
+      setMsg("模型已加载");
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      setModelBusy(false);
+    }
+  };
+
+  const downloadModel = async () => {
+    setModelBusy(true);
+    try {
+      const r = await api.downloadModel();
+      setModelReady(true);
+      setMsg(r);
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      setModelBusy(false);
+    }
+  };
 
   const saveKey = async () => {
     try {
@@ -51,6 +80,17 @@ export default function SettingsPage() {
         />
       </label>
       <button onClick={saveKey}>保存 API Key</button>
+
+      <div className="model-zone">
+        <h3>语音模型</h3>
+        <p className={modelReady ? "ok" : "muted"}>
+          {modelBusy ? "处理中…" : modelReady ? "已加载" : "未加载"}
+        </p>
+        <div className="danger-zone">
+          <button onClick={loadModel} disabled={modelBusy}>加载模型</button>
+          <button onClick={downloadModel} disabled={modelBusy}>下载模型（约 466MB）</button>
+        </div>
+      </div>
 
       <div className="danger-zone">
         <button onClick={exportData}>导出全部数据</button>

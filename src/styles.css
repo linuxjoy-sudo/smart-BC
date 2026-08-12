@@ -197,3 +197,17 @@ h2 { font-size: 20px; margin: 0 0 16px; }
   margin-top: 14px;
   color: var(--accent);
 }
+
+.settings-page .model-zone {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #2a2f42;
+}
+
+.settings-page .model-zone h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.settings-page .ok { color: #4ade80; }
+.settings-page .muted { color: var(--muted); }

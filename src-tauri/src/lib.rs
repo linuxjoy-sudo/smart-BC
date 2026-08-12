@@ -33,10 +33,23 @@ pub fn run() {
         Arc::new(llm::client::DeepSeekClient::new(&api_key))
             as Arc<dyn llm::provider::LlmProvider + Send + Sync>
     ));
+    let model_path = asr::model::model_path(&data_dir);
+    let transcriber = if model_path.exists() {
+        match asr::whisper::Transcriber::new(&model_path) {
+            Ok(t) => Some(t),
+            Err(e) => {
+                eprintln!("模型加载失败（可到设置页重新加载）: {e}");
+                None
+            }
+        }
+    } else {
+        eprintln!("模型文件不存在: {}", model_path.display());
+        None
+    };
     let state = AppState {
         conn: Arc::new(Mutex::new(conn)),
         recorder: Arc::new(Mutex::new(None)),
-        transcriber: Arc::new(Mutex::new(None)),
+        transcriber: Arc::new(Mutex::new(transcriber)),
         data_dir,
         llm,
     };
@@ -68,6 +81,8 @@ pub fn run() {
             commands::settings::clear_all_data,
             commands::settings::export_all,
             commands::settings::export_dir,
+            commands::model::load_model,
+            commands::model::download_model,
             commands::telemetry::log_usage,
             commands::telemetry::get_usage_stats
         ])

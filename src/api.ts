@@ -23,6 +23,8 @@ export const api = {
   clearAllData: () => invoke<void>("clear_all_data"),
   exportAll: (dest: string) => invoke<string>("export_all", { dest }),
   exportDir: () => invoke<string>("export_dir"),
+  loadModel: () => invoke<void>("load_model"),
+  downloadModel: () => invoke<string>("download_model"),
   logUsage: (event: string) => invoke<void>("log_usage", { event }),
   getUsageStats: () => invoke<{ recordings: number; queries: number; reminder_clicks: number; last_7d_active_days: number }>("get_usage_stats"),
 };
