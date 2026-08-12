@@ -13,7 +13,7 @@ fn mem_conn() -> Connection {
 fn config_roundtrip() {
     let dir = std::env::temp_dir().join("smartbc_cfg_test");
     std::fs::create_dir_all(&dir).unwrap();
-    let cfg = config::Config { api_key: "sk-test-123".into(), input_device: Some(1) };
+    let cfg = config::Config { api_key: "sk-test-123".into(), input_device: Some(1), ..Default::default() };
     config::save_config(&dir, &cfg).unwrap();
     let loaded = config::load_config(&dir);
     assert_eq!(loaded.api_key, "sk-test-123");
@@ -32,7 +32,7 @@ fn input_device_defaults_to_none() {
 fn api_key_update_preserves_input_device() {
     let dir = std::env::temp_dir().join("smartbc_cfg_test4");
     std::fs::create_dir_all(&dir).unwrap();
-    let cfg = config::Config { api_key: "sk-old".into(), input_device: Some(2) };
+    let cfg = config::Config { api_key: "sk-old".into(), input_device: Some(2), ..Default::default() };
     config::save_config(&dir, &cfg).unwrap();
     let mut updated = config::load_config(&dir);
     updated.api_key = "sk-new".into();
@@ -40,6 +40,37 @@ fn api_key_update_preserves_input_device() {
     let loaded = config::load_config(&dir);
     assert_eq!(loaded.api_key, "sk-new");
     assert_eq!(loaded.input_device, Some(2));
+    std::fs::remove_file(config::config_path(&dir)).ok();
+}
+
+#[test]
+fn voice_assistant_config_defaults() {
+    let dir = std::env::temp_dir().join("smartbc_voice_cfg_default");
+    let cfg = config::load_config(&dir);
+    assert!(!cfg.voice_assistant_enabled);
+    assert_eq!(cfg.wake_word, "小贝小贝");
+    assert_eq!(cfg.listen_window_secs, 30);
+    assert_eq!(cfg.wake_model, "");
+}
+
+#[test]
+fn voice_assistant_config_roundtrip() {
+    let dir = std::env::temp_dir().join("smartbc_voice_cfg_rt");
+    std::fs::create_dir_all(&dir).unwrap();
+    let cfg = config::Config {
+        api_key: String::new(),
+        input_device: None,
+        voice_assistant_enabled: true,
+        wake_word: "你好助手".into(),
+        listen_window_secs: 45,
+        wake_model: "base".into(),
+    };
+    config::save_config(&dir, &cfg).unwrap();
+    let loaded = config::load_config(&dir);
+    assert!(loaded.voice_assistant_enabled);
+    assert_eq!(loaded.wake_word, "你好助手");
+    assert_eq!(loaded.listen_window_secs, 45);
+    assert_eq!(loaded.wake_model, "base");
     std::fs::remove_file(config::config_path(&dir)).ok();
 }
 

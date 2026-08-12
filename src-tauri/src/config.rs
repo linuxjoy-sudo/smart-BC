@@ -1,13 +1,37 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub api_key: String,
     #[serde(default)]
     pub input_device: Option<usize>,
+    #[serde(default)]
+    pub voice_assistant_enabled: bool,
+    #[serde(default = "default_wake_word")]
+    pub wake_word: String,
+    #[serde(default = "default_listen_window")]
+    pub listen_window_secs: u32,
+    #[serde(default)]
+    pub wake_model: String,
 }
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            input_device: None,
+            voice_assistant_enabled: false,
+            wake_word: default_wake_word(),
+            listen_window_secs: default_listen_window(),
+            wake_model: String::new(),
+        }
+    }
+}
+
+fn default_wake_word() -> String { "小贝小贝".into() }
+fn default_listen_window() -> u32 { 30 }
 
 pub fn config_path(data_dir: &Path) -> std::path::PathBuf {
     data_dir.join("config.json")
