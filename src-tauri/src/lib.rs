@@ -10,6 +10,7 @@ pub mod query;
 pub mod scheduler;
 pub mod telemetry;
 pub mod timeparse;
+pub mod voice;
 
 use app_state::AppState;
 use std::sync::{Arc, Mutex};
