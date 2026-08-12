@@ -1,7 +1,30 @@
 use crate::audio::wav::{write_f32_wav, AudioError};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use serde::Serialize;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AudioDeviceInfo {
+    pub index: usize,
+    pub name: String,
+}
+
+pub fn list_input_devices() -> Result<Vec<AudioDeviceInfo>, AudioError> {
+    let host = cpal::default_host();
+    let devices = host
+        .input_devices()
+        .map_err(|e| AudioError(format!("list input devices: {e}")))?;
+    let mut out = Vec::new();
+    for (i, d) in devices.enumerate() {
+        let name = d
+            .description()
+            .map(|desc| desc.name().to_string())
+            .unwrap_or_else(|_| format!("设备 {i}"));
+        out.push(AudioDeviceInfo { index: i, name });
+    }
+    Ok(out)
+}
 
 pub struct Recorder {
     stream: cpal::Stream,

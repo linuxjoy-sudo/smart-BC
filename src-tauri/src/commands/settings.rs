@@ -14,7 +14,9 @@ pub struct ExportPayload {
 
 #[tauri::command]
 pub fn save_api_key(state: tauri::State<'_, AppState>, key: String) -> Result<(), String> {
-    save_config(&state.data_dir, &Config { api_key: key.clone() })?;
+    let mut cfg = crate::config::load_config(&state.data_dir);
+    cfg.api_key = key.clone();
+    save_config(&state.data_dir, &cfg)?;
     let mut guard = state.llm.lock().unwrap();
     *guard = std::sync::Arc::new(crate::llm::client::DeepSeekClient::new(&key));
     Ok(())
@@ -23,6 +25,16 @@ pub fn save_api_key(state: tauri::State<'_, AppState>, key: String) -> Result<()
 #[tauri::command]
 pub fn get_config(state: tauri::State<'_, AppState>) -> Result<Config, String> {
     Ok(crate::config::load_config(&state.data_dir))
+}
+
+#[tauri::command]
+pub fn save_input_device(
+    state: tauri::State<'_, AppState>,
+    index: Option<usize>,
+) -> Result<(), String> {
+    let mut cfg = crate::config::load_config(&state.data_dir);
+    cfg.input_device = index;
+    save_config(&state.data_dir, &cfg)
 }
 
 #[tauri::command]

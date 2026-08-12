@@ -5,13 +5,17 @@ export interface ConversationRow { id: number; created_at: string; transcript: s
 export interface ReminderRow { id: number; content: string; due_at: string | null; status: string; needs_time: boolean; conversation_id: number; }
 export interface PersonRow { id: number; name: string; relation: string; note: string; conversation_id: number; }
 export interface PreferenceRow { id: number; topic: string; value: string; conversation_id: number; }
-export interface Config { api_key: string; }
+export interface Config { api_key: string; input_device: number | null; }
+export interface AudioDevice { index: number; name: string; }
 
 export const api = {
   ping: () => invoke<string>("ping"),
-  startRecording: () => invoke<void>("start_recording"),
+  startRecording: (deviceIndex?: number) =>
+    invoke<void>("start_recording", deviceIndex !== undefined ? { deviceIndex } : {}),
   stopRecording: () => invoke<RecordResult>("stop_recording"),
   transcriptionReady: () => invoke<boolean>("get_transcription_status"),
+  listAudioDevices: () => invoke<AudioDevice[]>("list_audio_devices"),
+  saveInputDevice: (index: number | null) => invoke<void>("save_input_device", { index }),
   queryMemories: (q: string) => invoke<string>("query_memories", { question: q }),
   listConversations: () => invoke<ConversationRow[]>("list_conversations"),
   listReminders: () => invoke<ReminderRow[]>("list_reminders_cmd"),

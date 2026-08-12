@@ -5,6 +5,8 @@ use std::path::Path;
 pub struct Config {
     #[serde(default)]
     pub api_key: String,
+    #[serde(default)]
+    pub input_device: Option<usize>,
 }
 
 pub fn config_path(data_dir: &Path) -> std::path::PathBuf {

@@ -1,16 +1,35 @@
 import { useEffect, useState } from "react";
-import { api } from "../api";
+import { api, type AudioDevice } from "../api";
 
 export default function SettingsPage() {
   const [key, setKey] = useState("");
   const [msg, setMsg] = useState("");
   const [modelReady, setModelReady] = useState(false);
   const [modelBusy, setModelBusy] = useState(false);
+  const [devices, setDevices] = useState<AudioDevice[]>([]);
+  const [inputDevice, setInputDevice] = useState<number | null>(null);
 
   useEffect(() => {
-    api.getConfig().then((c) => setKey(c.api_key)).catch((e) => setMsg(String(e)));
+    api
+      .getConfig()
+      .then((c) => {
+        setKey(c.api_key);
+        setInputDevice(c.input_device ?? null);
+      })
+      .catch((e) => setMsg(String(e)));
     api.transcriptionReady().then(setModelReady).catch(() => {});
+    api.listAudioDevices().then(setDevices).catch(() => setDevices([]));
   }, []);
+
+  const saveInputDevice = async (index: number | null) => {
+    try {
+      await api.saveInputDevice(index);
+      setInputDevice(index);
+      setMsg(index === null ? "已恢复默认录音设备" : "录音设备已保存");
+    } catch (e) {
+      setMsg(String(e));
+    }
+  };
 
   const loadModel = async () => {
     setModelBusy(true);
@@ -90,6 +109,26 @@ export default function SettingsPage() {
           <button onClick={loadModel} disabled={modelBusy}>加载模型</button>
           <button onClick={downloadModel} disabled={modelBusy}>下载模型（约 466MB）</button>
         </div>
+      </div>
+
+      <div className="model-zone">
+        <h3>录音设备</h3>
+        <select
+          className="device-select"
+          value={inputDevice ?? ""}
+          onChange={(e) => saveInputDevice(e.target.value === "" ? null : Number(e.target.value))}
+        >
+          <option value="">默认（系统）</option>
+          {devices.map((d) => (
+            <option key={d.index} value={d.index}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+        <p className="muted">
+          如果录音总是转写出相同内容（如"(字幕製作:貝爾)"），说明录到的是电脑播放的声音
+          （"立体声混音"），请在此选择实际麦克风。
+        </p>
       </div>
 
       <div className="danger-zone">

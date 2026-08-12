@@ -50,12 +50,33 @@ pub fn process_audio_full(
 }
 
 #[tauri::command]
-pub fn start_recording(state: tauri::State<'_, AppState>) -> Result<(), String> {
+pub fn list_audio_devices() -> Result<Vec<crate::audio::recorder::AudioDeviceInfo>, String> {
+    crate::audio::recorder::list_input_devices().map_err(|e| e.to_string())
+}
+
+pub fn resolve_device_index(
+    data_dir: &std::path::Path,
+    requested: Option<usize>,
+) -> Result<Option<usize>, String> {
+    if let Some(idx) = requested {
+        let mut cfg = crate::config::load_config(data_dir);
+        cfg.input_device = Some(idx);
+        crate::config::save_config(data_dir, &cfg)?;
+    }
+    Ok(requested.or_else(|| crate::config::load_config(data_dir).input_device))
+}
+
+#[tauri::command]
+pub fn start_recording(
+    state: tauri::State<'_, AppState>,
+    device_index: Option<usize>,
+) -> Result<(), String> {
     let mut guard = state.recorder.lock().unwrap();
     if guard.is_some() {
         return Err("正在录音中".into());
     }
-    let recorder = crate::audio::recorder::Recorder::new(None).map_err(|e| e.to_string())?;
+    let idx = resolve_device_index(&state.data_dir, device_index)?;
+    let recorder = crate::audio::recorder::Recorder::new(idx).map_err(|e| e.to_string())?;
     recorder.start().map_err(|e| e.to_string())?;
     *guard = Some(recorder);
     Ok(())
