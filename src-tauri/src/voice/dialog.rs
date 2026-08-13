@@ -115,6 +115,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                 if matched {
                                     state_machine = transition(state_machine, DialogEvent::WakeWordHit);
                                     active_start = Instant::now();
+                                    silence_since = Instant::now();
                                     log_line(&state.data_dir, "唤醒命中 → Active，发送\"在呢，请说\"通知");
                                     if let Err(ne) = app.notification().builder().title("SmartBC").body("在呢，请说").show() {
                                         log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
@@ -139,29 +140,41 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             let t0 = Instant::now();
                             let transcribed = transcriber.transcribe_samples(listener.sample_rate, &sentence);
                             log_line(&state.data_dir, &format!("断句转写完成 (耗时 {:?})", t0.elapsed()));
-                            let result = match transcribed {
+                            let re_wake = match &transcribed {
                                 Ok(text) => {
-                                    log_line(&state.data_dir, &format!("问句: {text:?}"));
-                                    let conn = state.conn.lock().unwrap();
-                                    let llm = state.llm.lock().unwrap().clone();
-                                    answer_question_core(&conn, llm.as_ref(), &text)
+                                    contains_wake_word(text, &wake_word)
+                                        && text.chars().count() <= wake_word.chars().count() * 2
                                 }
-                                Err(e) => Err(e),
+                                Err(_) => false,
                             };
-                            match result {
-                                Ok(ans) => {
-                                    log_line(&state.data_dir, &format!("回答: {ans:?}"));
-                                    if let Err(ne) = app.notification().builder().title("SmartBC").body(ans).show() {
-                                        log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                            if re_wake {
+                                log_line(&state.data_dir, "重复唤醒词 → 重置聆听窗口，不问答");
+                                state_machine = transition(state_machine, DialogEvent::ProcessedOk);
+                            } else {
+                                let result = match transcribed {
+                                    Ok(text) => {
+                                        log_line(&state.data_dir, &format!("问句: {text:?}"));
+                                        let conn = state.conn.lock().unwrap();
+                                        let llm = state.llm.lock().unwrap().clone();
+                                        answer_question_core(&conn, llm.as_ref(), &text)
                                     }
-                                    state_machine = transition(state_machine, DialogEvent::ProcessedOk);
-                                }
-                                Err(e) => {
-                                    log_error(&state.data_dir, &format!("问答失败: {e}"));
-                                    if let Err(ne) = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show() {
-                                        log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                    Err(e) => Err(e),
+                                };
+                                match result {
+                                    Ok(ans) => {
+                                        log_line(&state.data_dir, &format!("回答: {ans:?}"));
+                                        if let Err(ne) = app.notification().builder().title("SmartBC").body(ans).show() {
+                                            log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                        }
+                                        state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                     }
-                                    state_machine = transition(state_machine, DialogEvent::ProcessedErr);
+                                    Err(e) => {
+                                        log_error(&state.data_dir, &format!("问答失败: {e}"));
+                                        if let Err(ne) = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show() {
+                                            log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                        }
+                                        state_machine = transition(state_machine, DialogEvent::ProcessedErr);
+                                    }
                                 }
                             }
                             active_start = Instant::now();
