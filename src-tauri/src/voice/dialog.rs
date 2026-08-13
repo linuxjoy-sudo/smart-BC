@@ -156,6 +156,9 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             if re_wake {
                                 log_line(&state.data_dir, "重复唤醒词 → 重置聆听窗口，不问答");
                                 state_machine = transition(state_machine, DialogEvent::ProcessedOk);
+                                if let Err(ne) = app.notification().builder().title("SmartBC").body("在呢，请说").show() {
+                                    log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                }
                             } else {
                                 let result = match transcribed {
                                     Ok(text) => {
