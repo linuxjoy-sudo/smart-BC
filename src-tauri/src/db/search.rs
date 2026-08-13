@@ -13,8 +13,13 @@ pub fn search_transcripts(conn: &Connection, query: &str, limit: usize) -> Resul
     if trimmed.len() < 2 {
         return Ok(Vec::new());
     }
-    // trigram 分词要求查询串 >= 3 字符；中文 2 字词按片段用 LIKE 兜底
-    let sql = if trimmed.chars().count() >= 3 {
+    // trigram 分词要求查询串 >= 3 字符，且对标点敏感：先去标点，不足 3 字符用 LIKE 兜底
+    let clean: String = trimmed
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect();
+    let fts = clean.chars().count() >= 3;
+    let sql = if fts {
         r#"SELECT rowid, transcript,
                   snippet(conversations_fts, 0, '【', '】', '…', 12) AS snip
            FROM conversations_fts
@@ -29,7 +34,13 @@ pub fn search_transcripts(conn: &Connection, query: &str, limit: usize) -> Resul
            LIMIT ?2"#
     };
     let mut stmt = conn.prepare(sql)?;
-    let rows = stmt.query_map(params![trimmed, limit as i64], |r| {
+    // fts5 分支：双引号短语包裹防语法错误；内部引号转义
+    let match_param = if fts {
+        format!("\"{}\"", clean.replace('"', "\"\""))
+    } else {
+        trimmed.to_string()
+    };
+    let rows = stmt.query_map(params![match_param, limit as i64], |r| {
         Ok(SearchHit {
             conversation_id: r.get(0)?,
             transcript: r.get(1)?,
