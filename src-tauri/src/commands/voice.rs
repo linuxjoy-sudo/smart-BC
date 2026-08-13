@@ -15,11 +15,14 @@ pub fn listener_running() -> bool {
 
 pub fn try_start_listener(app: tauri::AppHandle, state: AppState) -> bool {
     if state.recorder.lock().unwrap().is_some() {
+        crate::voice::log::log_error(&state.data_dir, "try_start_listener: 正在录音中，拒绝启动监听");
         return false;
     }
     if LISTENER_RUNNING.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+        crate::voice::log::log_line(&state.data_dir, "try_start_listener: 监听已在运行（CAS 失败），跳过");
         return false;
     }
+    crate::voice::log::log_line(&state.data_dir, "try_start_listener: 启动监听线程");
     std::thread::spawn(move || {
         crate::voice::dialog::run_listener(app, state);
         LISTENER_RUNNING.store(false, Ordering::Release);
@@ -46,12 +49,14 @@ pub fn set_voice_assistant(
         let mut cfg = crate::config::load_config(&state.data_dir);
         cfg.voice_assistant_enabled = true;
         crate::config::save_config(&state.data_dir, &cfg)?;
-        let _ = try_start_listener(app, state.inner().clone());
+        let started = try_start_listener(app, state.inner().clone());
+        crate::voice::log::log_line(&state.data_dir, &format!("set_voice_assistant(true): 已保存 config，try_start_listener={started}"));
         Ok("语音助手已开启".into())
     } else {
         let mut cfg = crate::config::load_config(&state.data_dir);
         cfg.voice_assistant_enabled = false;
         crate::config::save_config(&state.data_dir, &cfg)?;
+        crate::voice::log::log_line(&state.data_dir, "set_voice_assistant(false): 已保存 config（监听线程将于轮询时退出）");
         Ok("语音助手已关闭".into())
     }
 }
