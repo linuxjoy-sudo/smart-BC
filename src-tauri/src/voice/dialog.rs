@@ -73,6 +73,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
     let mut silence_since = Instant::now();
     let mut was_speaking = false;
     let mut last_vad_log = Instant::now();
+    let mut last_wake_check = Instant::now();
 
     loop {
         if !voice_assistant_enabled(&state.data_dir) {
@@ -103,8 +104,11 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
             DialogState::Idle => {
                 if !speaking && was_speaking {
                     let burst_rms = rms(&buf);
-                    log_line(&state.data_dir, &format!("语音突发结束: burst_rms={burst_rms:.4} buf_ms={}", buf.len() * 1000 / sr));
-                    if burst_rms > 0.01 {
+                    let buf_ms = buf.len() * 1000 / sr;
+                    log_line(&state.data_dir, &format!("语音突发结束: burst_rms={burst_rms:.4} buf_ms={}", buf_ms));
+                    let throttled = last_wake_check.elapsed().as_secs_f64() < 2.0;
+                    if burst_rms > 0.01 && buf_ms >= 300 && !throttled {
+                        last_wake_check = Instant::now();
                         let chunk: Vec<f32> = buf.split_off(buf.len().saturating_sub(sr * 5));
                         log_line(&state.data_dir, &format!("唤醒转写: chunk_ms={} 开始", chunk.len() * 1000 / sr));
                         let t0 = Instant::now();
@@ -124,6 +128,8 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             }
                             Err(e) => log_error(&state.data_dir, &format!("唤醒转写失败: {e} (耗时 {:?})", t0.elapsed())),
                         }
+                    } else if throttled {
+                        log_line(&state.data_dir, "唤醒转写节流跳过（距上次 <2s）");
                     }
                     buf.clear();
                 } else if buf.len() > sr * 5 {
