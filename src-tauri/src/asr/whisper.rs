@@ -34,6 +34,7 @@ impl Transcriber {
         params.set_no_context(true);
         params.set_no_speech_thold(0.9);
         params.set_temperature(0.0);
+        params.set_initial_prompt("以下是简体中文对话：");
         state
             .full(params, &mono)
             .map_err(|e| format!("whisper run: {e}"))?;
