@@ -65,6 +65,27 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
             return;
         }
     };
+    let wake_transcriber = state
+        .wake_transcriber
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| transcriber.clone());
+    log_line(&state.data_dir, "唤醒模型: base（若未加载则回退 small）");
+    let mut wake_state = match wake_transcriber.new_state() {
+        Ok(s) => s,
+        Err(e) => {
+            log_error(&state.data_dir, &format!("唤醒状态创建失败: {e}"));
+            return;
+        }
+    };
+    let mut sentence_state = match transcriber.new_state() {
+        Ok(s) => s,
+        Err(e) => {
+            log_error(&state.data_dir, &format!("问答状态创建失败: {e}"));
+            return;
+        }
+    };
     let mut vad = EnergyVad::new(0.02, (listener.sample_rate / 100).max(1) as usize);
     let sr = listener.sample_rate as usize;
     let mut buf: Vec<f32> = Vec::new();
@@ -112,7 +133,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                         let chunk: Vec<f32> = buf.split_off(buf.len().saturating_sub(sr * 5));
                         log_line(&state.data_dir, &format!("唤醒转写: chunk_ms={} 开始", chunk.len() * 1000 / sr));
                         let t0 = Instant::now();
-                        match transcriber.transcribe_samples(listener.sample_rate, &chunk) {
+                        match wake_transcriber.transcribe_with_state(&mut wake_state, listener.sample_rate, &chunk) {
                             Ok(t) => {
                                 let matched = contains_wake_word(&t, &wake_word);
                                 log_line(&state.data_dir, &format!("唤醒转写文本: {t:?} matched={matched} (耗时 {:?})", t0.elapsed()));
@@ -144,7 +165,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             state_machine = transition(state_machine, DialogEvent::SentenceEnd);
                             log_line(&state.data_dir, &format!("断句转写: sentence_ms={} 开始", sentence.len() * 1000 / sr));
                             let t0 = Instant::now();
-                            let transcribed = transcriber.transcribe_samples(listener.sample_rate, &sentence);
+                            let transcribed = transcriber.transcribe_with_state(&mut sentence_state, listener.sample_rate, &sentence);
                             log_line(&state.data_dir, &format!("断句转写完成 (耗时 {:?})", t0.elapsed()));
                             let re_wake = match &transcribed {
                                 Ok(text) => {

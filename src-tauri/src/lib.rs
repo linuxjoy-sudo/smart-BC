@@ -21,6 +21,11 @@ fn ping() -> String {
     "pong".into()
 }
 
+fn cfg_uses_wake_model(data_dir: &std::path::Path) -> bool {
+    let m = config::load_config(data_dir).wake_model;
+    m == "base" || m == "tiny"
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let data_dir = dirs::data_local_dir()
@@ -47,10 +52,28 @@ pub fn run() {
         eprintln!("模型文件不存在: {}", model_path.display());
         None
     };
+    let wake_transcriber = if cfg_uses_wake_model(&data_dir) {
+        let wake_path = asr::model::wake_model_path(&data_dir);
+        if wake_path.exists() {
+            match asr::whisper::Transcriber::new(&wake_path) {
+                Ok(t) => Some(t),
+                Err(e) => {
+                    eprintln!("唤醒模型加载失败，回退主模型: {e}");
+                    None
+                }
+            }
+        } else {
+            eprintln!("唤醒模型不存在（{}），回退主模型", wake_path.display());
+            None
+        }
+    } else {
+        None
+    };
     let state = AppState {
         conn: Arc::new(Mutex::new(conn)),
         recorder: Arc::new(Mutex::new(None)),
         transcriber: Arc::new(Mutex::new(transcriber)),
+        wake_transcriber: Arc::new(Mutex::new(wake_transcriber)),
         data_dir,
         llm,
     };
