@@ -105,7 +105,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                     let burst_rms = rms(&buf);
                     log_line(&state.data_dir, &format!("语音突发结束: burst_rms={burst_rms:.4} buf_ms={}", buf.len() * 1000 / sr));
                     if burst_rms > 0.01 {
-                        let chunk: Vec<f32> = buf.split_off(buf.len().saturating_sub(sr * 3));
+                        let chunk: Vec<f32> = buf.split_off(buf.len().saturating_sub(sr * 5));
                         log_line(&state.data_dir, &format!("唤醒转写: chunk_ms={} 开始", chunk.len() * 1000 / sr));
                         let t0 = Instant::now();
                         match transcriber.transcribe_samples(listener.sample_rate, &chunk) {

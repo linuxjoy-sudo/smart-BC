@@ -31,6 +31,9 @@ impl Transcriber {
         params.set_language(Some("zh"));
         params.set_n_threads(4);
         params.set_translate(false);
+        params.set_no_context(true);
+        params.set_no_speech_thold(0.9);
+        params.set_temperature(0.0);
         state
             .full(params, &mono)
             .map_err(|e| format!("whisper run: {e}"))?;
