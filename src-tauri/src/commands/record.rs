@@ -75,6 +75,10 @@ pub fn start_recording(
     if guard.is_some() {
         return Err("正在录音中".into());
     }
+    use crate::commands::voice::voice_assistant_enabled;
+    if voice_assistant_enabled(&state.data_dir) {
+        return Err("语音助手监听中，请先在设置中关闭".into());
+    }
     let idx = resolve_device_index(&state.data_dir, device_index)?;
     let recorder = crate::audio::recorder::Recorder::new(idx).map_err(|e| e.to_string())?;
     recorder.start().map_err(|e| e.to_string())?;

@@ -87,7 +87,9 @@ pub fn run() {
             commands::model::load_model,
             commands::model::download_model,
             commands::telemetry::log_usage,
-            commands::telemetry::get_usage_stats
+            commands::telemetry::get_usage_stats,
+            commands::voice::set_voice_assistant,
+            commands::voice::get_voice_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
