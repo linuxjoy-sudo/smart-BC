@@ -43,6 +43,6 @@ impl Transcriber {
                 text.push_str(seg.to_str().map_err(|e| e.to_string())?);
             }
         }
-        Ok(text.trim().to_string())
+        Ok(crate::asr::zh::to_simplified(text.trim()).trim().to_string())
     }
 }
