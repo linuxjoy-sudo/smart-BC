@@ -25,3 +25,15 @@ fn whitespace_only_wake_word_matches_nothing() {
     assert!(!contains_wake_word("小贝小贝，明天几点开会", "   "));
     assert!(!contains_wake_word("小贝小贝，明天几点开会", "\t \n"));
 }
+
+#[test]
+fn matches_with_punctuation_between_chars() {
+    assert!(contains_wake_word("小贝﹑小贝﹑", "小贝小贝"));
+    assert!(contains_wake_word("小贝，小贝！", "小贝小贝"));
+}
+
+#[test]
+fn punctuation_only_wake_word_matches_nothing() {
+    assert!(!contains_wake_word("小贝小贝，明天几点开会", "﹑﹑"));
+    assert!(!contains_wake_word("小贝小贝，明天几点开会", "，。"));
+}
