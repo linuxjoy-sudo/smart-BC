@@ -195,6 +195,13 @@ h2 { font-size: 20px; margin: 0 0 16px; }
   cursor: pointer;
 }
 
+.settings-page .switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .settings-page .danger-zone {
   margin-top: 24px;
   display: flex;

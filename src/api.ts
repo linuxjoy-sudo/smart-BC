@@ -5,8 +5,9 @@ export interface ConversationRow { id: number; created_at: string; transcript: s
 export interface ReminderRow { id: number; content: string; due_at: string | null; status: string; needs_time: boolean; conversation_id: number; }
 export interface PersonRow { id: number; name: string; relation: string; note: string; conversation_id: number; }
 export interface PreferenceRow { id: number; topic: string; value: string; conversation_id: number; }
-export interface Config { api_key: string; input_device: number | null; }
+export interface Config { api_key: string; input_device: number | null; voice_assistant_enabled?: boolean; }
 export interface AudioDevice { index: number; name: string; }
+export interface VoiceStatus { enabled: boolean; state: string; }
 
 export const api = {
   ping: () => invoke<string>("ping"),
@@ -31,4 +32,6 @@ export const api = {
   downloadModel: () => invoke<string>("download_model"),
   logUsage: (event: string) => invoke<void>("log_usage", { event }),
   getUsageStats: () => invoke<{ recordings: number; queries: number; reminder_clicks: number; last_7d_active_days: number }>("get_usage_stats"),
+  setVoiceAssistant: (enabled: boolean) => invoke<string>("set_voice_assistant", { enabled }),
+  getVoiceStatus: () => invoke<VoiceStatus>("get_voice_status"),
 };

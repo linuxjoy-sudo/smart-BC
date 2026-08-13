@@ -8,6 +8,8 @@ export default function SettingsPage() {
   const [modelBusy, setModelBusy] = useState(false);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [inputDevice, setInputDevice] = useState<number | null>(null);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
 
   useEffect(() => {
     api
@@ -19,6 +21,7 @@ export default function SettingsPage() {
       .catch((e) => setMsg(String(e)));
     api.transcriptionReady().then(setModelReady).catch(() => {});
     api.listAudioDevices().then(setDevices).catch(() => setDevices([]));
+    api.getVoiceStatus().then((s) => setVoiceOn(s.enabled)).catch(() => {});
   }, []);
 
   const saveInputDevice = async (index: number | null) => {
@@ -76,6 +79,19 @@ export default function SettingsPage() {
     }
   };
 
+  const toggleVoice = async () => {
+    setVoiceBusy(true);
+    try {
+      const r = await api.setVoiceAssistant(!voiceOn);
+      setVoiceOn(!voiceOn);
+      setMsg(r);
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
+      setVoiceBusy(false);
+    }
+  };
+
   const exportData = async () => {
     try {
       const dest = `${await api.exportDir()}/smartbc-export.json`;
@@ -128,6 +144,22 @@ export default function SettingsPage() {
         <p className="muted">
           如果录音总是转写出相同内容（如"(字幕製作:貝爾)"），说明录到的是电脑播放的声音
           （"立体声混音"），请在此选择实际麦克风。
+        </p>
+      </div>
+
+      <div className="model-zone">
+        <h3>语音助手</h3>
+        <label className="switch-row">
+          <input
+            type="checkbox"
+            checked={voiceOn}
+            disabled={voiceBusy}
+            onChange={toggleVoice}
+          />
+          常驻监听（唤醒词"小贝小贝"后连续问答）
+        </label>
+        <p className="muted">
+          {voiceOn ? "监听中：说出唤醒词开始对话" : "已关闭：开启后应用将持续监听麦克风"}
         </p>
       </div>
 
