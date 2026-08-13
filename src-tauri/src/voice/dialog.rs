@@ -58,6 +58,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
     let mut state_machine = DialogState::Idle;
     let mut active_start = Instant::now();
     let mut silence_since = Instant::now();
+    let mut was_speaking = false;
 
     loop {
         if !voice_assistant_enabled(&state.data_dir) {
@@ -72,17 +73,19 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
 
         match state_machine {
             DialogState::Idle => {
-                if speaking && buf.len() > sr * 3 {
-                    let chunk: Vec<f32> = buf.split_off(buf.len().saturating_sub(sr * 3));
-                    match transcriber.transcribe_samples(listener.sample_rate, &chunk) {
-                        Ok(t) if contains_wake_word(&t, &wake_word) => {
-                            state_machine = transition(state_machine, DialogEvent::WakeWordHit);
-                            active_start = Instant::now();
-                            let _ = app.notification().builder().title("SmartBC").body("在呢，请说").show();
-                            buf.clear();
+                if !speaking && was_speaking {
+                    if rms(&buf) > 0.01 {
+                        let chunk: Vec<f32> = buf.split_off(buf.len().saturating_sub(sr * 3));
+                        match transcriber.transcribe_samples(listener.sample_rate, &chunk) {
+                            Ok(t) if contains_wake_word(&t, &wake_word) => {
+                                state_machine = transition(state_machine, DialogEvent::WakeWordHit);
+                                active_start = Instant::now();
+                                let _ = app.notification().builder().title("SmartBC").body("在呢，请说").show();
+                            }
+                            _ => {}
                         }
-                        _ => { buf.clear(); }
                     }
+                    buf.clear();
                 } else if buf.len() > sr * 5 {
                     buf.clear();
                 }
@@ -93,11 +96,15 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                         let sentence: Vec<f32> = std::mem::take(&mut buf);
                         if !sentence.is_empty() && rms(&sentence) > 0.01 {
                             state_machine = transition(state_machine, DialogEvent::SentenceEnd);
-                            let conn = state.conn.lock().unwrap();
-                            let llm = state.llm.lock().unwrap().clone();
-                            let result = transcriber
-                                .transcribe_samples(listener.sample_rate, &sentence)
-                                .and_then(|text| answer_question_core(&conn, llm.as_ref(), &text));
+                            let transcribed = transcriber.transcribe_samples(listener.sample_rate, &sentence);
+                            let result = match transcribed {
+                                Ok(text) => {
+                                    let conn = state.conn.lock().unwrap();
+                                    let llm = state.llm.lock().unwrap().clone();
+                                    answer_question_core(&conn, llm.as_ref(), &text)
+                                }
+                                Err(e) => Err(e),
+                            };
                             match result {
                                 Ok(ans) => {
                                     let _ = app.notification().builder().title("SmartBC").body(ans).show();
@@ -122,6 +129,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
             }
             DialogState::Processing => {}
         }
+        was_speaking = speaking;
         std::thread::sleep(Duration::from_millis(50));
     }
 }

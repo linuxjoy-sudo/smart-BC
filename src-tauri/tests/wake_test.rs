@@ -19,3 +19,9 @@ fn no_match_without_wake() {
 fn no_match_partial() {
     assert!(!contains_wake_word("小贝，你好", "小贝小贝"));
 }
+
+#[test]
+fn whitespace_only_wake_word_matches_nothing() {
+    assert!(!contains_wake_word("小贝小贝，明天几点开会", "   "));
+    assert!(!contains_wake_word("小贝小贝，明天几点开会", "\t \n"));
+}
