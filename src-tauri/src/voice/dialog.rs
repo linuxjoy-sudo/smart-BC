@@ -98,11 +98,12 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                     log_line(&state.data_dir, &format!("语音突发结束: burst_rms={burst_rms:.4} buf_ms={}", buf.len() * 1000 / sr));
                     if burst_rms > 0.01 {
                         let chunk: Vec<f32> = buf.split_off(buf.len().saturating_sub(sr * 3));
-                        log_line(&state.data_dir, &format!("唤醒转写: chunk_ms={}", chunk.len() * 1000 / sr));
+                        log_line(&state.data_dir, &format!("唤醒转写: chunk_ms={} 开始", chunk.len() * 1000 / sr));
+                        let t0 = Instant::now();
                         match transcriber.transcribe_samples(listener.sample_rate, &chunk) {
                             Ok(t) => {
                                 let matched = contains_wake_word(&t, &wake_word);
-                                log_line(&state.data_dir, &format!("唤醒转写文本: {t:?} matched={matched}"));
+                                log_line(&state.data_dir, &format!("唤醒转写文本: {t:?} matched={matched} (耗时 {:?})", t0.elapsed()));
                                 if matched {
                                     state_machine = transition(state_machine, DialogEvent::WakeWordHit);
                                     active_start = Instant::now();
@@ -110,7 +111,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                     let _ = app.notification().builder().title("SmartBC").body("在呢，请说").show();
                                 }
                             }
-                            Err(e) => log_error(&state.data_dir, &format!("唤醒转写失败: {e}")),
+                            Err(e) => log_error(&state.data_dir, &format!("唤醒转写失败: {e} (耗时 {:?})", t0.elapsed())),
                         }
                     }
                     buf.clear();
@@ -124,8 +125,10 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                         let sentence: Vec<f32> = std::mem::take(&mut buf);
                         if !sentence.is_empty() && rms(&sentence) > 0.01 {
                             state_machine = transition(state_machine, DialogEvent::SentenceEnd);
+                            log_line(&state.data_dir, &format!("断句转写: sentence_ms={} 开始", sentence.len() * 1000 / sr));
+                            let t0 = Instant::now();
                             let transcribed = transcriber.transcribe_samples(listener.sample_rate, &sentence);
-                            log_line(&state.data_dir, &format!("断句转写: sentence_ms={}", sentence.len() * 1000 / sr));
+                            log_line(&state.data_dir, &format!("断句转写完成 (耗时 {:?})", t0.elapsed()));
                             let result = match transcribed {
                                 Ok(text) => {
                                     log_line(&state.data_dir, &format!("问句: {text:?}"));

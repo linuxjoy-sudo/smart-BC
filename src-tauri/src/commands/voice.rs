@@ -23,8 +23,21 @@ pub fn try_start_listener(app: tauri::AppHandle, state: AppState) -> bool {
         return false;
     }
     crate::voice::log::log_line(&state.data_dir, "try_start_listener: 启动监听线程");
+    let data_dir = state.data_dir.clone();
     std::thread::spawn(move || {
-        crate::voice::dialog::run_listener(app, state);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            crate::voice::dialog::run_listener(app, state);
+        }));
+        if let Err(payload) = result {
+            let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+                (*s).to_string()
+            } else if let Some(s) = payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic payload".to_string()
+            };
+            crate::voice::log::log_error(&data_dir, &format!("run_listener 线程 PANIC: {msg}"));
+        }
         LISTENER_RUNNING.store(false, Ordering::Release);
     });
     true
