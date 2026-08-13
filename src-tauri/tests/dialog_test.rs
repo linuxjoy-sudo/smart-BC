@@ -1,4 +1,4 @@
-use smart_bc::voice::dialog::{transition, DialogEvent, DialogState};
+use smart_bc::voice::dialog::{silence_exceeded, transition, window_expired, DialogEvent, DialogState};
 
 #[test]
 fn idle_to_active_on_wake() {
@@ -34,4 +34,16 @@ fn processing_returns_to_active_on_error() {
 fn active_times_out_to_idle() {
     let s = transition(DialogState::Active, DialogEvent::WindowTimeout);
     assert!(matches!(s, DialogState::Idle));
+}
+
+#[test]
+fn window_expiry_after_30s() {
+    assert!(window_expired(std::time::Duration::from_secs(31), std::time::Duration::from_secs(30)));
+    assert!(!window_expired(std::time::Duration::from_secs(10), std::time::Duration::from_secs(30)));
+}
+
+#[test]
+fn silence_limit_for_sentence_end() {
+    assert!(silence_exceeded(1.6, 1.5));
+    assert!(!silence_exceeded(0.5, 1.5));
 }
