@@ -37,3 +37,17 @@ fn punctuation_only_wake_word_matches_nothing() {
     assert!(!contains_wake_word("小贝小贝，明天几点开会", "﹑﹑"));
     assert!(!contains_wake_word("小贝小贝，明天几点开会", "，。"));
 }
+
+#[test]
+fn matches_homophone_variants() {
+    assert!(contains_wake_word("小杯小杯", "小贝小贝"));
+    assert!(contains_wake_word("小辈小辈", "小贝小贝"));
+    assert!(contains_wake_word("小备小备", "小贝小贝"));
+    assert!(contains_wake_word("小北小北", "小贝小贝"));
+    assert!(contains_wake_word("小贝小贝", "小杯小杯"));
+}
+
+#[test]
+fn no_match_for_different_initial_consonant() {
+    assert!(!contains_wake_word("小费小费", "小贝小贝"));
+}
