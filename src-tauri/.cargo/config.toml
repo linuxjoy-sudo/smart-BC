@@ -1,0 +1,6 @@
+[env]
+# whisper-rs-sys 在 MSVC 下被 cmake-rs 覆盖掉 /O2 优化（whisper 转写慢 20-60 倍）。
+# 通过 cargo [env] 注入 Release 优化 flags，cmake-rs 检测到已定义即不再覆盖。
+CMAKE_C_FLAGS_RELEASE = "/O2 /Ob2 /DNDEBUG -MD -Brepro -W0"
+CMAKE_CXX_FLAGS_RELEASE = "/O2 /Ob2 /DNDEBUG /utf-8 -MD -Brepro -W0"
+CMAKE_ASM_FLAGS_RELEASE = "/O2 -MD -Brepro -W0"

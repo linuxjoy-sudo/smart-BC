@@ -43,7 +43,9 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
         Ok(l) => l,
         Err(e) => {
             log_error(&state.data_dir, &format!("Listener 启动失败: {e}"));
-            let _ = app.notification().builder().title("SmartBC 语音助手").body(format!("启动失败：{e}")).show();
+            if let Err(ne) = app.notification().builder().title("SmartBC 语音助手").body(format!("启动失败：{e}")).show() {
+                log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+            }
             return;
         }
     };
@@ -53,7 +55,9 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
         Some(t) => t,
         None => {
             log_error(&state.data_dir, "模型未加载，语音助手不可用");
-            let _ = app.notification().builder().title("SmartBC 语音助手").body("模型未加载，语音助手不可用").show();
+            if let Err(ne) = app.notification().builder().title("SmartBC 语音助手").body("模型未加载，语音助手不可用").show() {
+                log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+            }
             return;
         }
     };
@@ -108,7 +112,9 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                     state_machine = transition(state_machine, DialogEvent::WakeWordHit);
                                     active_start = Instant::now();
                                     log_line(&state.data_dir, "唤醒命中 → Active，发送\"在呢，请说\"通知");
-                                    let _ = app.notification().builder().title("SmartBC").body("在呢，请说").show();
+                                    if let Err(ne) = app.notification().builder().title("SmartBC").body("在呢，请说").show() {
+                                        log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                    }
                                 }
                             }
                             Err(e) => log_error(&state.data_dir, &format!("唤醒转写失败: {e} (耗时 {:?})", t0.elapsed())),
@@ -141,12 +147,16 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             match result {
                                 Ok(ans) => {
                                     log_line(&state.data_dir, &format!("回答: {ans:?}"));
-                                    let _ = app.notification().builder().title("SmartBC").body(ans).show();
+                                    if let Err(ne) = app.notification().builder().title("SmartBC").body(ans).show() {
+                                        log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                    }
                                     state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                 }
                                 Err(e) => {
                                     log_error(&state.data_dir, &format!("问答失败: {e}"));
-                                    let _ = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show();
+                                    if let Err(ne) = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show() {
+                                        log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                    }
                                     state_machine = transition(state_machine, DialogEvent::ProcessedErr);
                                 }
                             }
