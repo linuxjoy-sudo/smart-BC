@@ -38,8 +38,12 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
     let cfg = load_config(&state.data_dir);
     let wake_word = cfg.wake_word.clone();
     let window = Duration::from_secs(cfg.listen_window_secs.max(1) as u64);
-    log_line(&state.data_dir, &format!("run_listener 启动: wake_word={wake_word:?} window={}s", window.as_secs()));
-    let listener = match Listener::start(None, 5) {
+    let input_device = cfg.input_device;
+    log_line(&state.data_dir, &format!(
+        "run_listener 启动: wake_word={wake_word:?} window={}s input_device={input_device:?}",
+        window.as_secs()
+    ));
+    let listener = match Listener::start(input_device, 5) {
         Ok(l) => l,
         Err(e) => {
             log_error(&state.data_dir, &format!("Listener 启动失败: {e}"));
