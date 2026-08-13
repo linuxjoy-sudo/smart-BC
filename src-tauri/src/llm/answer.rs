@@ -46,6 +46,17 @@ pub fn answer_question(
     prefs: &[PreferenceRow],
 ) -> Result<String, LlmError> {
     let prompt = build_answer_prompt(question, hits, people, prefs);
-    let v = provider.chat_json("你是记忆助理。直接输出回答文本。", &prompt)?;
-    Ok(v.as_str().unwrap_or(&v.to_string()).to_string())
+    // DeepSeek json_object 要求 prompt 含 "json" 字样；约定输出 {"answer": "..."} 并解析
+    let v = provider.chat_json(
+        "你是记忆助理。请以 JSON 格式输出回答：{\"answer\": \"回答文本\"}，只输出合法 JSON，不要 Markdown 代码块。",
+        &prompt,
+    )?;
+    Ok(v.get("answer")
+        .and_then(|a| a.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            v.as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| v.to_string())
+        }))
 }
