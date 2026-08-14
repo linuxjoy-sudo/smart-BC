@@ -1,4 +1,4 @@
-use smart_bc::memory::extract::{build_extract_prompt, parse_extraction};
+use smart_bc::memory::extract::{build_extract_prompt, clean_reminder_content, parse_extraction};
 
 #[test]
 fn parse_full_extraction() {
@@ -37,4 +37,19 @@ fn prompt_contains_transcript_and_json_requirement() {
     let p = build_extract_prompt("周三交方案给张伟");
     assert!(p.contains("周三交方案给张伟"));
     assert!(p.contains("JSON"), "prompt: {p}");
+}
+
+#[test]
+fn clean_reminder_strips_prefixes() {
+    assert_eq!(clean_reminder_content("提醒我喝水"), "喝水");
+    assert_eq!(clean_reminder_content("帮我记得买牛奶"), "买牛奶");
+    assert_eq!(clean_reminder_content("提醒我提醒我喝水"), "喝水");
+    assert_eq!(clean_reminder_content("去孙里"), "去孙里");
+    assert_eq!(clean_reminder_content(""), "");
+}
+
+#[test]
+fn prompt_guides_clean_content() {
+    let p = build_extract_prompt("提醒我喝水");
+    assert!(p.contains("提醒我喝水"), "prompt: {p}");
 }

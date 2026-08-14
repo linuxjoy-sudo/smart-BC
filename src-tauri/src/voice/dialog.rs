@@ -153,6 +153,15 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
             log_line(&state.data_dir, &format!("语音突发开始: level={level:.4}"));
         }
 
+        if state_machine == DialogState::Idle
+            && crate::scheduler::PENDING_REMINDER_ID.load(std::sync::atomic::Ordering::SeqCst) > 0
+        {
+            state_machine = DialogState::Active;
+            active_start = Instant::now();
+            silence_since = Instant::now();
+            log_line(&state.data_dir, "提醒触发，进入聆听响应窗口（可说\"完成\"或\"延后X分钟\"）");
+        }
+
         match state_machine {
             DialogState::Idle => {
                 if !speaking && was_speaking {
@@ -225,6 +234,40 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                     log_line(&state.data_dir, "重复唤醒词（small 二次检测命中）→ 重置聆听窗口");
                                     state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                     crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
+                                } else if let Some(rid) = {
+                                    let v = crate::scheduler::PENDING_REMINDER_ID.load(std::sync::atomic::Ordering::SeqCst);
+                                    (v > 0).then_some(v)
+                                } {
+                                    let response = match &transcribed {
+                                        Ok(text) => handle_reminder_response(text),
+                                        Err(_) => ReminderResponse::Unknown,
+                                    };
+                                    match response {
+                                        ReminderResponse::Done => {
+                                            let conn = state.conn.lock().unwrap();
+                                            let _ = crate::db::reminders::set_status(&conn, rid, "done");
+                                            crate::scheduler::PENDING_REMINDER_ID.store(0, std::sync::atomic::Ordering::SeqCst);
+                                            log_line(&state.data_dir, &format!("提醒 {rid} 语音完成"));
+                                            crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "好的，已帮你完成".into());
+                                        }
+                                        ReminderResponse::Deferred(dt) => {
+                                            let due = dt.format("%Y-%m-%d %H:%M:%S").to_string();
+                                            let conn = state.conn.lock().unwrap();
+                                            match crate::db::reminders::update_due(&conn, rid, &due) {
+                                                Ok(_) => {
+                                                    crate::scheduler::PENDING_REMINDER_ID.store(0, std::sync::atomic::Ordering::SeqCst);
+                                                    log_line(&state.data_dir, &format!("提醒 {rid} 延后到 {due}"));
+                                                    crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, format!("好的，延后到{}", friendly_time(dt)));
+                                                }
+                                                Err(e) => log_error(&state.data_dir, &format!("延后失败: {e}")),
+                                            }
+                                        }
+                                        ReminderResponse::Unknown => {
+                                            log_line(&state.data_dir, "提醒响应未识别，提示指令");
+                                            crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "可以说\"完成\"或\"延后5分钟\"".into());
+                                        }
+                                    }
+                                    state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                 } else if let Some((id, content, attempts)) = pending_time.take() {
                                     let parsed = match &transcribed {
                                         Ok(text) => {
@@ -275,7 +318,8 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                             TranscriptOutcome::NeedsTime(id, content) => {
                                                 log_line(&state.data_dir, &format!("无时间提醒，语音追问: {content}"));
                                                 pending_time = Some((id, content.clone(), 0));
-                                                ("追问时间", format!("什么时候提醒你{}？", content))
+                                                let clean = crate::memory::extract::clean_reminder_content(&content);
+                                                ("追问时间", format!("好的，什么时候提醒你{}？", clean))
                                             }
                                         };
                                         log_line(&state.data_dir, &format!("{label}: {message:?}"));
@@ -301,6 +345,9 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                 }
                 if window_expired(active_start.elapsed(), window) {
                     log_line(&state.data_dir, "聆听窗口超时 → Idle");
+                    if crate::scheduler::PENDING_REMINDER_ID.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                        crate::scheduler::PENDING_REMINDER_ID.store(0, std::sync::atomic::Ordering::SeqCst);
+                    }
                     state_machine = transition(state_machine, DialogEvent::WindowTimeout);
                     buf.clear();
                 }
@@ -328,6 +375,27 @@ pub enum TranscriptOutcome {
     Recorded(String),
     Answered(String),
     NeedsTime(i64, String),
+}
+
+enum ReminderResponse {
+    Done,
+    Deferred(chrono::NaiveDateTime),
+    Unknown,
+}
+
+fn handle_reminder_response(text: &str) -> ReminderResponse {
+    let done_keys = ["完成", "好了", "行了", "知道了", "可以了", "收到", "搞定"];
+    let defer_keys = ["延后", "再等", "晚点", "过一会", "过会儿", "稍后", "推迟"];
+    if done_keys.iter().any(|k| text.contains(k)) {
+        return ReminderResponse::Done;
+    }
+    if defer_keys.iter().any(|k| text.contains(k)) {
+        let now = chrono::Local::now().naive_local();
+        if let Some(dt) = crate::timeparse::parse_due(text, now) {
+            return ReminderResponse::Deferred(dt);
+        }
+    }
+    ReminderResponse::Unknown
 }
 
 pub fn process_transcript(

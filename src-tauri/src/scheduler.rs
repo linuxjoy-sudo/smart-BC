@@ -4,6 +4,9 @@ use rusqlite::Connection;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
+
+/// 待语音响应的提醒 id（0=无）：触发后由 dialog 聆听"完成/延后"指令。
+pub static PENDING_REMINDER_ID: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
 pub fn due_reminders_for_notification(reminders: &[ReminderRow], now: NaiveDateTime) -> Vec<ReminderRow> {
     let cutoff = now + Duration::minutes(15);
     reminders
@@ -63,7 +66,9 @@ fn sync_due(conn: &Arc<Mutex<Connection>>, app: &AppHandle, data_dir: &std::path
     };
     for r in due {
         let cfg = crate::config::load_config(data_dir);
-        crate::voice::reply::deliver_reply(app, data_dir, &cfg.reply_mode, format!("提醒：{}", r.content));
+        let content = crate::memory::extract::clean_reminder_content(&r.content);
+        crate::voice::reply::deliver_reply(app, data_dir, &cfg.reply_mode, format!("到时间了，该{}了", content));
+        PENDING_REMINDER_ID.store(r.id, std::sync::atomic::Ordering::SeqCst);
         if let Ok(guard) = conn.lock() {
             let _ = mark_notified(&guard, r.id);
         }
@@ -106,12 +111,14 @@ fn schedule_timer(
         };
         if still_pending {
             let cfg = crate::config::load_config(&data_dir);
+            let content = crate::memory::extract::clean_reminder_content(&reminder.content);
             crate::voice::reply::deliver_reply(
                 &app,
                 &data_dir,
                 &cfg.reply_mode,
-                format!("提醒：{}", reminder.content),
+                format!("到时间了，该{}了", content),
             );
+            PENDING_REMINDER_ID.store(reminder.id, std::sync::atomic::Ordering::SeqCst);
             if let Ok(guard) = conn.lock() {
                 let _ = mark_notified(&guard, reminder.id);
             }
