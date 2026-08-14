@@ -44,7 +44,7 @@ impl Transcriber {
         if mono.is_empty() {
             return Err("音频为空".into());
         }
-        let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+        let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
         params.set_language(Some("zh"));
         params.set_n_threads(4);
         params.set_translate(false);
