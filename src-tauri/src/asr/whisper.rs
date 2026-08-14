@@ -40,7 +40,7 @@ impl Transcriber {
         if mono.is_empty() {
             return Err("音频为空".into());
         }
-        let mono = trim_leading_silence(&mono);
+        let mono = normalize_volume(&mono);
         if mono.is_empty() {
             return Err("音频为空".into());
         }
@@ -65,26 +65,20 @@ impl Transcriber {
     }
 }
 
-/// 按 10ms 帧 RMS 扫描，裁掉首段连续低于阈值的静音（缩短 encoder 输入）。
-fn trim_leading_silence(mono: &[f32]) -> Vec<f32> {
-    const FRAME: usize = 160; // 16kHz 10ms
-    const THRESHOLD: f32 = 0.01;
-    if mono.len() <= FRAME {
-        return mono.to_vec();
-    }
-    let mut start = 0;
-    while start + FRAME <= mono.len() {
-        let frame = &mono[start..start + FRAME];
-        let sum: f32 = frame.iter().map(|s| s * s).sum();
-        if (sum / FRAME as f32).sqrt() > THRESHOLD {
-            break;
-        }
-        start += FRAME;
-    }
-    if start >= mono.len() {
+/// 音量归一化：弱麦克风输入（RMS 偏低）放大到合理水平，改善 whisper 识别。
+fn normalize_volume(mono: &[f32]) -> Vec<f32> {
+    const TARGET_RMS: f32 = 0.2;
+    const MAX_GAIN: f32 = 8.0;
+    if mono.is_empty() {
         return Vec::new();
     }
-    mono[start..].to_vec()
+    let sum: f32 = mono.iter().map(|s| s * s).sum();
+    let rms = (sum / mono.len() as f32).sqrt();
+    if rms < 0.001 {
+        return mono.to_vec();
+    }
+    let gain = (TARGET_RMS / rms).min(MAX_GAIN);
+    mono.iter().map(|s| (s * gain).clamp(-1.0, 1.0)).collect()
 }
 
 #[cfg(test)]
@@ -92,24 +86,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn trims_leading_silence_only() {
-        let mut v = vec![0.0f32; 3200]; // 200ms 静音
-        v.extend(vec![0.5f32; 1600]); // 100ms 语音
-        let out = trim_leading_silence(&v);
-        assert!(out.len() < v.len());
-        assert!(out.iter().any(|&s| s > 0.4));
+    fn normalizes_weak_signal() {
+        let v = vec![0.03f32; 4800];
+        let out = normalize_volume(&v);
+        let rms = (out.iter().map(|s| s * s).sum::<f32>() / out.len() as f32).sqrt();
+        assert!(rms > 0.05, "弱信号应被放大，实际 rms={rms}");
     }
 
     #[test]
-    fn keeps_non_silent_unchanged() {
-        let v = vec![0.5f32; 4800];
-        let out = trim_leading_silence(&v);
-        assert_eq!(out.len(), v.len());
-    }
-
-    #[test]
-    fn all_silence_returns_empty() {
+    fn silence_stays_silent() {
         let v = vec![0.0f32; 4800];
-        assert!(trim_leading_silence(&v).is_empty());
+        let out = normalize_volume(&v);
+        assert_eq!(out, v);
     }
 }
