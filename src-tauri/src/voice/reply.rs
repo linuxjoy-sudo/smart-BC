@@ -29,13 +29,13 @@ pub fn deliver_reply(
             }
         }
         DeliverAction::Voice => {
-            crate::voice::tts::speak_async(message);
+            crate::voice::tts::speak_async(data_dir, message);
         }
         DeliverAction::Both => {
             if let Err(ne) = app.notification().builder().title("SmartBC").body(&message).show() {
                 log_error(data_dir, &format!("通知发送失败: {ne}"));
             }
-            crate::voice::tts::speak_async(message);
+            crate::voice::tts::speak_async(data_dir, message);
         }
     }
 }
