@@ -53,7 +53,18 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
             return;
         }
     };
-    log_line(&state.data_dir, &format!("Listener 就绪: sample_rate={} 缓冲=5s", listener.sample_rate));
+    let device_name = crate::audio::recorder::list_input_devices()
+        .ok()
+        .and_then(|devs| {
+            devs.iter()
+                .find(|d| Some(d.index) == input_device)
+                .map(|d| d.name.clone())
+        })
+        .unwrap_or_else(|| "未知".into());
+    log_line(&state.data_dir, &format!(
+        "Listener 就绪: sample_rate={} 缓冲=5s 设备[{input_device:?}]={device_name}",
+        listener.sample_rate
+    ));
     let transcriber = state.transcriber.lock().unwrap().clone();
     let transcriber = match transcriber {
         Some(t) => t,
