@@ -16,6 +16,30 @@ fn normalize_aspiration(s: &str) -> String {
         .replace('q', "j")
 }
 
+/// 模糊包含：wake_key 的字符按顺序在 text_key 中出现，允许跳过少量插入字符
+/// （whisper 常插入"的/得/地"等助词，如"小贝的小贝"→xiaobeidexiaobei）。
+/// 唤醒词之后的内容不限制（正常句子尾部）。
+fn fuzzy_contains(text_key: &str, wake_key: &str, max_insert: usize) -> bool {
+    let text_chars: Vec<char> = text_key.chars().collect();
+    let wake_chars: Vec<char> = wake_key.chars().collect();
+    let mut ti = 0;
+    let mut skipped = 0;
+    for &wc in &wake_chars {
+        while ti < text_chars.len() && text_chars[ti] != wc {
+            ti += 1;
+            skipped += 1;
+            if skipped > max_insert {
+                return false;
+            }
+        }
+        if ti >= text_chars.len() {
+            return false;
+        }
+        ti += 1;
+    }
+    true
+}
+
 pub fn contains_wake_word(text: &str, wake_word: &str) -> bool {
     if text.is_empty() || wake_word.is_empty() {
         return false;
@@ -25,7 +49,7 @@ pub fn contains_wake_word(text: &str, wake_word: &str) -> bool {
     if wake_key.is_empty() {
         return false;
     }
-    text_key.contains(&wake_key)
+    fuzzy_contains(&text_key, &wake_key, 3)
 }
 
 #[cfg(test)]

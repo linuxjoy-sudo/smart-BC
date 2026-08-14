@@ -51,3 +51,20 @@ fn matches_homophone_variants() {
 fn no_match_for_different_initial_consonant() {
     assert!(!contains_wake_word("小费小费", "小贝小贝"));
 }
+
+#[test]
+fn matches_with_inserted_particle() {
+    assert!(contains_wake_word("小贝的小贝", "小贝小贝"));
+}
+
+#[test]
+fn no_match_when_too_many_inserted_chars() {
+    assert!(!contains_wake_word("小贝的的小贝", "小贝小贝"));
+    assert!(!contains_wake_word("小贝的的的小贝", "小贝小贝"));
+    assert!(!contains_wake_word("小贝今天小贝", "小贝小贝"));
+}
+
+#[test]
+fn no_match_when_wake_word_chars_reordered() {
+    assert!(!contains_wake_word("贝小贝小", "小贝小贝"));
+}

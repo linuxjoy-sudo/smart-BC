@@ -213,31 +213,44 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             } else {
                                 let transcribed = transcriber.transcribe_with_state(&mut sentence_state, listener.sample_rate, &sentence);
                                 log_line(&state.data_dir, &format!("断句转写完成 (耗时 {:?})", t0.elapsed()));
-                                let result = match transcribed {
-                                    Ok(text) => {
-                                        log_line(&state.data_dir, &format!("转写: {text:?}"));
-                                        let conn = state.conn.lock().unwrap();
-                                        let llm = state.llm.lock().unwrap().clone();
-                                        process_transcript(&conn, llm.as_ref(), &text)
+                                let re_wake_small = match &transcribed {
+                                    Ok(t) => {
+                                        contains_wake_word(t, &wake_word)
+                                            && t.chars().count() <= wake_word.chars().count() * 2
                                     }
-                                    Err(e) => Err(e),
+                                    Err(_) => false,
                                 };
-                                match result {
-                                    Ok(outcome) => {
-                                        let (label, message) = match outcome {
-                                            TranscriptOutcome::Recorded(msg) => ("已记录", msg),
-                                            TranscriptOutcome::Answered(ans) => ("回答", ans),
-                                        };
-                                        log_line(&state.data_dir, &format!("{label}: {message:?}"));
-                                        crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, message);
-                                        state_machine = transition(state_machine, DialogEvent::ProcessedOk);
-                                    }
-                                    Err(e) => {
-                                        log_error(&state.data_dir, &format!("处理失败: {e}"));
-                                        if let Err(ne) = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show() {
-                                            log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                if re_wake_small {
+                                    log_line(&state.data_dir, "重复唤醒词（small 二次检测命中）→ 重置聆听窗口");
+                                    state_machine = transition(state_machine, DialogEvent::ProcessedOk);
+                                    crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
+                                } else {
+                                    let result = match transcribed {
+                                        Ok(text) => {
+                                            log_line(&state.data_dir, &format!("转写: {text:?}"));
+                                            let conn = state.conn.lock().unwrap();
+                                            let llm = state.llm.lock().unwrap().clone();
+                                            process_transcript(&conn, llm.as_ref(), &text)
                                         }
-                                        state_machine = transition(state_machine, DialogEvent::ProcessedErr);
+                                        Err(e) => Err(e),
+                                    };
+                                    match result {
+                                        Ok(outcome) => {
+                                            let (label, message) = match outcome {
+                                                TranscriptOutcome::Recorded(msg) => ("已记录", msg),
+                                                TranscriptOutcome::Answered(ans) => ("回答", ans),
+                                            };
+                                            log_line(&state.data_dir, &format!("{label}: {message:?}"));
+                                            crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, message);
+                                            state_machine = transition(state_machine, DialogEvent::ProcessedOk);
+                                        }
+                                        Err(e) => {
+                                            log_error(&state.data_dir, &format!("处理失败: {e}"));
+                                            if let Err(ne) = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show() {
+                                                log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
+                                            }
+                                            state_machine = transition(state_machine, DialogEvent::ProcessedErr);
+                                        }
                                     }
                                 }
                             }
