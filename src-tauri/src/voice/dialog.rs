@@ -119,7 +119,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
     let mut silence_since = Instant::now();
     let mut was_speaking = false;
     let mut last_vad_log = Instant::now();
-    let mut last_wake_check = Instant::now();
+    let mut last_wake_check = Instant::now() - Duration::from_secs(3);
 
     loop {
         if !voice_assistant_enabled(&state.data_dir) {
