@@ -49,6 +49,14 @@ fn clean_reminder_strips_prefixes() {
 }
 
 #[test]
+fn clean_reminder_strips_call_me_prefixes() {
+    assert_eq!(clean_reminder_content("到点叫我做早餐"), "做早餐");
+    assert_eq!(clean_reminder_content("叫我一声起床"), "起床");
+    assert_eq!(clean_reminder_content("喊我做早餐"), "做早餐");
+    assert_eq!(clean_reminder_content("叫我"), "");
+}
+
+#[test]
 fn prompt_guides_clean_content() {
     let p = build_extract_prompt("提醒我喝水");
     assert!(p.contains("提醒我喝水"), "prompt: {p}");
