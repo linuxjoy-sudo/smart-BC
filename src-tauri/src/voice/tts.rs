@@ -1,8 +1,17 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static TTS_PLAYING: AtomicBool = AtomicBool::new(false);
+
+pub fn tts_playing() -> bool {
+    TTS_PLAYING.load(Ordering::Relaxed)
+}
+
 #[cfg(windows)]
 pub fn speak_async(data_dir: &std::path::Path, text: String) {
     use crate::voice::log::{log_error, log_line};
     use std::time::{Duration, Instant};
     let dir = data_dir.to_path_buf();
+    TTS_PLAYING.store(true, Ordering::Relaxed);
     std::thread::spawn(move || {
         match tts::Tts::new(tts::Backends::WinRt) {
             Ok(mut tts) => {
@@ -13,6 +22,7 @@ pub fn speak_async(data_dir: &std::path::Path, text: String) {
                     Ok(_) => log_line(&dir, "TTS 播放已提交"),
                     Err(e) => {
                         log_error(&dir, &format!("TTS 播放失败: {e}"));
+                        TTS_PLAYING.store(false, Ordering::Relaxed);
                         return;
                     }
                 }
@@ -28,6 +38,9 @@ pub fn speak_async(data_dir: &std::path::Path, text: String) {
             }
             Err(e) => log_error(&dir, &format!("TTS 初始化失败: {e}")),
         }
+        // 回声尾巴：播放结束后麦克风仍可能拾取残余声音，稍后释放抑制
+        std::thread::sleep(Duration::from_millis(300));
+        TTS_PLAYING.store(false, Ordering::Relaxed);
     });
 }
 

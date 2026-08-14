@@ -129,6 +129,12 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
         }
         let snap = listener.buffer.lock().unwrap().snapshot();
         if snap.is_empty() { std::thread::sleep(Duration::from_millis(100)); continue; }
+        if crate::voice::tts::tts_playing() {
+            buf.clear();
+            silence_since = Instant::now();
+            std::thread::sleep(Duration::from_millis(50));
+            continue;
+        }
         let speaking = vad.feed(&snap);
         buf.extend_from_slice(&snap);
         listener.buffer.lock().unwrap().clear();
