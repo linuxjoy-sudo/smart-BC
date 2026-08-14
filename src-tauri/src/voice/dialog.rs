@@ -35,6 +35,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
     use tauri_plugin_notification::NotificationExt;
 
     let cfg = load_config(&state.data_dir);
+    let reply_mode = cfg.reply_mode.clone();
     let wake_word = cfg.wake_word.clone();
     let window = Duration::from_secs(cfg.listen_window_secs.max(1) as u64);
     let input_device = cfg.input_device;
@@ -140,10 +141,8 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                     state_machine = transition(state_machine, DialogEvent::WakeWordHit);
                                     active_start = Instant::now();
                                     silence_since = Instant::now();
-                                    log_line(&state.data_dir, "唤醒命中 → Active，发送\"在呢，请说\"通知");
-                                    if let Err(ne) = app.notification().builder().title("SmartBC").body("在呢，请说").show() {
-                                        log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
-                                    }
+                                    log_line(&state.data_dir, "唤醒命中 → Active，发送\"在呢，请说\"回复");
+                                    crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
                                 }
                             }
                             Err(e) => log_error(&state.data_dir, &format!("唤醒转写失败: {e} (耗时 {:?})", t0.elapsed())),
@@ -176,9 +175,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             if re_wake {
                                 log_line(&state.data_dir, "重复唤醒词 → 重置聆听窗口，不问答");
                                 state_machine = transition(state_machine, DialogEvent::ProcessedOk);
-                                if let Err(ne) = app.notification().builder().title("SmartBC").body("在呢，请说").show() {
-                                    log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
-                                }
+                                crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
                             } else {
                                 let result = match transcribed {
                                     Ok(text) => {
@@ -196,9 +193,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                             TranscriptOutcome::Answered(ans) => ("回答", ans),
                                         };
                                         log_line(&state.data_dir, &format!("{label}: {message:?}"));
-                                        if let Err(ne) = app.notification().builder().title("SmartBC").body(message).show() {
-                                            log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
-                                        }
+                                        crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, message);
                                         state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                     }
                                     Err(e) => {

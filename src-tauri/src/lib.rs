@@ -106,6 +106,7 @@ pub fn run() {
             commands::settings::save_api_key,
             commands::settings::get_config,
             commands::settings::save_input_device,
+            commands::settings::save_reply_mode,
             commands::settings::delete_conversation,
             commands::settings::clear_all_data,
             commands::settings::export_all,

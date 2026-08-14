@@ -64,6 +64,7 @@ fn voice_assistant_config_roundtrip() {
         wake_word: "你好助手".into(),
         listen_window_secs: 45,
         wake_model: "base".into(),
+        reply_mode: "notification".into(),
     };
     config::save_config(&dir, &cfg).unwrap();
     let loaded = config::load_config(&dir);

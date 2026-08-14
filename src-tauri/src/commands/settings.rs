@@ -38,6 +38,13 @@ pub fn save_input_device(
 }
 
 #[tauri::command]
+pub fn save_reply_mode(state: tauri::State<'_, AppState>, mode: String) -> Result<(), String> {
+    let mut cfg = crate::config::load_config(&state.data_dir);
+    cfg.reply_mode = mode;
+    save_config(&state.data_dir, &cfg)
+}
+
+#[tauri::command]
 pub fn export_dir(state: tauri::State<'_, AppState>) -> Result<String, String> {
     Ok(state.data_dir.to_string_lossy().to_string())
 }

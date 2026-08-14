@@ -10,6 +10,7 @@ export default function SettingsPage() {
   const [inputDevice, setInputDevice] = useState<number | null>(null);
   const [voiceOn, setVoiceOn] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [replyMode, setReplyMode] = useState("notification");
 
   useEffect(() => {
     api
@@ -17,6 +18,7 @@ export default function SettingsPage() {
       .then((c) => {
         setKey(c.api_key);
         setInputDevice(c.input_device ?? null);
+        setReplyMode(c.reply_mode ?? "notification");
       })
       .catch((e) => setMsg(String(e)));
     api.transcriptionReady().then(setModelReady).catch(() => {});
@@ -92,6 +94,16 @@ export default function SettingsPage() {
     }
   };
 
+  const saveReplyMode = async (mode: string) => {
+    try {
+      await api.saveReplyMode(mode);
+      setReplyMode(mode);
+      setMsg("回复方式已保存");
+    } catch (e) {
+      setMsg(String(e));
+    }
+  };
+
   const exportData = async () => {
     try {
       const dest = `${await api.exportDir()}/smartbc-export.json`;
@@ -161,6 +173,16 @@ export default function SettingsPage() {
         <p className="muted">
           {voiceOn ? "监听中：说出唤醒词开始对话" : "已关闭：开启后应用将持续监听麦克风"}
         </p>
+        <label className="muted">回复方式</label>
+        <select
+          className="device-select"
+          value={replyMode}
+          onChange={(e) => saveReplyMode(e.target.value)}
+        >
+          <option value="notification">仅系统通知</option>
+          <option value="voice">仅语音播报</option>
+          <option value="both">通知 + 语音播报</option>
+        </select>
       </div>
 
       <div className="danger-zone">

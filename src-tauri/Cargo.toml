@@ -41,3 +41,6 @@ httpmock = "0.8.3"
 # 本地 patch：绿色版（未安装）通知不设自定义 AUMID，
 # 否则 Windows toast 因未注册 AUMID 静默失败（见 vendor/tauri-plugin-notification/src/desktop.rs）
 tauri-plugin-notification = { path = "../vendor/tauri-plugin-notification" }
+
+[target."cfg(windows)".dependencies]
+tts = { version = "0.26.3", default-features = false }
