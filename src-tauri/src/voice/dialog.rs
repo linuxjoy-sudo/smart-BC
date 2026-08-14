@@ -120,6 +120,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
     let mut was_speaking = false;
     let mut last_vad_log = Instant::now();
     let mut last_wake_check = Instant::now() - Duration::from_secs(3);
+    let mut pending_time: Option<(i64, String, u32)> = None;
 
     loop {
         if !voice_assistant_enabled(&state.data_dir) {
@@ -224,6 +225,38 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                     log_line(&state.data_dir, "重复唤醒词（small 二次检测命中）→ 重置聆听窗口");
                                     state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                     crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
+                                } else if let Some((id, content, attempts)) = pending_time.take() {
+                                    let parsed = match &transcribed {
+                                        Ok(text) => {
+                                            let now = chrono::Local::now().naive_local();
+                                            crate::timeparse::parse_due(text, now)
+                                        }
+                                        Err(_) => None,
+                                    };
+                                    match parsed {
+                                        Some(dt) => {
+                                            let due = dt.format("%Y-%m-%d %H:%M:%S").to_string();
+                                            let conn = state.conn.lock().unwrap();
+                                            match crate::db::reminders::update_due(&conn, id, &due) {
+                                                Ok(_) => {
+                                                    log_line(&state.data_dir, &format!("语音补时间成功: {content} => {due}"));
+                                                    crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, format!("好的，{}提醒你{}", friendly_time(dt), content));
+                                                }
+                                                Err(e) => log_error(&state.data_dir, &format!("补时间失败: {e}")),
+                                            }
+                                        }
+                                        None => {
+                                            if attempts < 2 {
+                                                log_line(&state.data_dir, &format!("补时间未解析，追问 {content}"));
+                                                pending_time = Some((id, content, attempts + 1));
+                                                crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "没听清时间，请再说一次，比如'下午三点'".into());
+                                            } else {
+                                                log_line(&state.data_dir, &format!("补时间多次失败，放弃 {content}"));
+                                                crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, format!("暂时没设好时间，之后可以重新提醒我{}", content));
+                                            }
+                                        }
+                                    }
+                                    state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                 } else {
                                     let result = match transcribed {
                                         Ok(text) => {
@@ -234,16 +267,21 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                         }
                                         Err(e) => Err(e),
                                     };
-                                    match result {
-                                        Ok(outcome) => {
-                                            let (label, message) = match outcome {
-                                                TranscriptOutcome::Recorded(msg) => ("已记录", msg),
-                                                TranscriptOutcome::Answered(ans) => ("回答", ans),
-                                            };
-                                            log_line(&state.data_dir, &format!("{label}: {message:?}"));
-                                            crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, message);
-                                            state_machine = transition(state_machine, DialogEvent::ProcessedOk);
-                                        }
+                                match result {
+                                    Ok(outcome) => {
+                                        let (label, message) = match outcome {
+                                            TranscriptOutcome::Recorded(msg) => ("已记录", msg),
+                                            TranscriptOutcome::Answered(ans) => ("回答", ans),
+                                            TranscriptOutcome::NeedsTime(id, content) => {
+                                                log_line(&state.data_dir, &format!("无时间提醒，语音追问: {content}"));
+                                                pending_time = Some((id, content.clone(), 0));
+                                                ("追问时间", format!("什么时候提醒你{}？", content))
+                                            }
+                                        };
+                                        log_line(&state.data_dir, &format!("{label}: {message:?}"));
+                                        crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, message);
+                                        state_machine = transition(state_machine, DialogEvent::ProcessedOk);
+                                    }
                                         Err(e) => {
                                             log_error(&state.data_dir, &format!("处理失败: {e}"));
                                             if let Err(ne) = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show() {
@@ -289,6 +327,7 @@ pub fn transition(state: DialogState, event: DialogEvent) -> DialogState {
 pub enum TranscriptOutcome {
     Recorded(String),
     Answered(String),
+    NeedsTime(i64, String),
 }
 
 pub fn process_transcript(
@@ -308,8 +347,15 @@ pub fn process_transcript(
                 || ext.episode.is_some();
             if !ext.reminders.is_empty() {
                 let now = chrono::Local::now().naive_local();
-                crate::db::reminders::save_reminders(conn, &ext.reminders, result.conversation_id, now)
+                let ids = crate::db::reminders::save_reminders(conn, &ext.reminders, result.conversation_id, now)
                     .map_err(|e| format!("提醒入库失败: {e}"))?;
+                for id in ids {
+                    if let Ok(Some(r)) = crate::db::reminders::get_reminder(conn, id) {
+                        if r.needs_time {
+                            return Ok(TranscriptOutcome::NeedsTime(r.id, r.content));
+                        }
+                    }
+                }
             }
             if !ext.people.is_empty() || !ext.preferences.is_empty() || ext.episode.is_some() {
                 crate::db::memories::save_extraction(conn, &ext, result.conversation_id)
@@ -373,4 +419,16 @@ fn build_record_message(ext: &crate::memory::types::MemoryExtraction) -> String 
         parts.push(format!("事件：{}", ep.summary));
     }
     format!("已记录：{}", parts.join("；"))
+}
+
+fn friendly_time(dt: chrono::NaiveDateTime) -> String {
+    let now = chrono::Local::now().naive_local();
+    let day = if dt.date() == now.date() {
+        "今天".to_string()
+    } else if dt.date() == now.date().succ_opt().unwrap_or(now.date()) {
+        "明天".to_string()
+    } else {
+        dt.format("%m月%d日").to_string()
+    };
+    format!("{day}{}", dt.format("%H:%M"))
 }
