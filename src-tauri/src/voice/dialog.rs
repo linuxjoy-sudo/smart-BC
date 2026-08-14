@@ -25,7 +25,6 @@ pub fn silence_exceeded(silence_secs: f64, limit_secs: f64) -> bool {
 }
 
 pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
-    use crate::commands::query::answer_question_core;
     use crate::commands::voice::voice_assistant_enabled;
     use crate::config::load_config;
     use crate::voice::listener::Listener;
@@ -183,23 +182,27 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             } else {
                                 let result = match transcribed {
                                     Ok(text) => {
-                                        log_line(&state.data_dir, &format!("问句: {text:?}"));
+                                        log_line(&state.data_dir, &format!("转写: {text:?}"));
                                         let conn = state.conn.lock().unwrap();
                                         let llm = state.llm.lock().unwrap().clone();
-                                        answer_question_core(&conn, llm.as_ref(), &text)
+                                        process_transcript(&conn, llm.as_ref(), &text)
                                     }
                                     Err(e) => Err(e),
                                 };
                                 match result {
-                                    Ok(ans) => {
-                                        log_line(&state.data_dir, &format!("回答: {ans:?}"));
-                                        if let Err(ne) = app.notification().builder().title("SmartBC").body(ans).show() {
+                                    Ok(outcome) => {
+                                        let (label, message) = match outcome {
+                                            TranscriptOutcome::Recorded(msg) => ("已记录", msg),
+                                            TranscriptOutcome::Answered(ans) => ("回答", ans),
+                                        };
+                                        log_line(&state.data_dir, &format!("{label}: {message:?}"));
+                                        if let Err(ne) = app.notification().builder().title("SmartBC").body(message).show() {
                                             log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
                                         }
                                         state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                     }
                                     Err(e) => {
-                                        log_error(&state.data_dir, &format!("问答失败: {e}"));
+                                        log_error(&state.data_dir, &format!("处理失败: {e}"));
                                         if let Err(ne) = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show() {
                                             log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
                                         }
@@ -237,4 +240,64 @@ pub fn transition(state: DialogState, event: DialogEvent) -> DialogState {
         (_, DialogEvent::MicUnavailable) => DialogState::Idle,
         _ => state,
     }
+}
+
+pub enum TranscriptOutcome {
+    Recorded(String),
+    Answered(String),
+}
+
+pub fn process_transcript(
+    conn: &rusqlite::Connection,
+    llm: &dyn crate::llm::provider::LlmProvider,
+    text: &str,
+) -> Result<TranscriptOutcome, String> {
+    use crate::commands::record::store_transcript;
+    use crate::memory::extract::extract_from_transcript;
+
+    let result = store_transcript(conn, text, None)?;
+    match extract_from_transcript(llm, text) {
+        Ok(ext) => {
+            let has_content = !ext.reminders.is_empty()
+                || !ext.people.is_empty()
+                || !ext.preferences.is_empty()
+                || ext.episode.is_some();
+            if !ext.reminders.is_empty() {
+                let now = chrono::Local::now().naive_local();
+                crate::db::reminders::save_reminders(conn, &ext.reminders, result.conversation_id, now)
+                    .map_err(|e| format!("提醒入库失败: {e}"))?;
+            }
+            if !ext.people.is_empty() || !ext.preferences.is_empty() || ext.episode.is_some() {
+                crate::db::memories::save_extraction(conn, &ext, result.conversation_id)
+                    .map_err(|e| format!("记忆入库失败: {e}"))?;
+            }
+            if has_content {
+                Ok(TranscriptOutcome::Recorded(build_record_message(&ext)))
+            } else {
+                Ok(TranscriptOutcome::Answered(
+                    crate::commands::query::answer_question_core(conn, llm, text)?,
+                ))
+            }
+        }
+        Err(_e) => Ok(TranscriptOutcome::Answered(
+            crate::commands::query::answer_question_core(conn, llm, text)?,
+        )),
+    }
+}
+
+fn build_record_message(ext: &crate::memory::types::MemoryExtraction) -> String {
+    let mut parts = Vec::new();
+    for r in &ext.reminders {
+        parts.push(format!("提醒：{}", r.content));
+    }
+    for p in &ext.people {
+        parts.push(format!("人脉：{}（{}）", p.name, p.relation));
+    }
+    for pr in &ext.preferences {
+        parts.push(format!("偏好：{}：{}", pr.topic, pr.value));
+    }
+    if let Some(ep) = &ext.episode {
+        parts.push(format!("事件：{}", ep.summary));
+    }
+    format!("已记录：{}", parts.join("；"))
 }
