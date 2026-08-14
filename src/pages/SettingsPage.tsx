@@ -12,6 +12,10 @@ export default function SettingsPage() {
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [replyMode, setReplyMode] = useState("notification");
 
+  const loadDevices = () => {
+    api.listAudioDevices().then(setDevices).catch(() => setDevices([]));
+  };
+
   useEffect(() => {
     api
       .getConfig()
@@ -22,7 +26,7 @@ export default function SettingsPage() {
       })
       .catch((e) => setMsg(String(e)));
     api.transcriptionReady().then(setModelReady).catch(() => {});
-    api.listAudioDevices().then(setDevices).catch(() => setDevices([]));
+    loadDevices();
     api.getVoiceStatus().then((s) => setVoiceOn(s.enabled)).catch(() => {});
   }, []);
 
@@ -153,9 +157,11 @@ export default function SettingsPage() {
             </option>
           ))}
         </select>
+        <button onClick={loadDevices} className="secondary">刷新设备列表</button>
         <p className="muted">
-          如果录音总是转写出相同内容（如"(字幕製作:貝爾)"），说明录到的是电脑播放的声音
-          （"立体声混音"），请在此选择实际麦克风。
+          新插入的蓝牙耳机需先切换为"通话/麦克风"模式（A2DP 音乐模式不作为输入设备），
+          然后点击刷新。若录音总是转写出相同内容（如"(字幕製作:貝爾)"），说明录到的是
+          电脑播放的声音（"立体声混音"），请选择实际麦克风。
         </p>
       </div>
 

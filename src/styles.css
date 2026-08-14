@@ -217,6 +217,10 @@ h2 { font-size: 20px; margin: 0 0 16px; }
   gap: 10px;
 }
 
+.settings-page .secondary {
+  background: #3a4a6b;
+}
+
 .settings-page .danger {
   background: var(--danger);
 }
