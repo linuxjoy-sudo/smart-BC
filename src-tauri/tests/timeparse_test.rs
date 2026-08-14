@@ -45,3 +45,12 @@ fn relative_minutes_hours_days() {
     assert_eq!(parse_due("2小时后", base), base.checked_add_signed(chrono::Duration::hours(2)));
     assert_eq!(parse_due("3天后", base), base.checked_add_signed(chrono::Duration::days(3)));
 }
+
+#[test]
+fn relative_with_chinese_numerals() {
+    let base = now();
+    assert_eq!(parse_due("一分钟之后", base), base.checked_add_signed(chrono::Duration::minutes(1)));
+    assert_eq!(parse_due("十分钟后", base), base.checked_add_signed(chrono::Duration::minutes(10)));
+    assert_eq!(parse_due("两小时后", base), base.checked_add_signed(chrono::Duration::hours(2)));
+    assert_eq!(parse_due("三天后", base), base.checked_add_signed(chrono::Duration::days(3)));
+}

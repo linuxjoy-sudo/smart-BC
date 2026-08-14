@@ -35,26 +35,69 @@ pub fn spawn(
     data_dir: std::path::PathBuf,
 ) {
     std::thread::spawn(move || {
-        loop {
-            {
-                let guard = conn.lock().unwrap();
+        sync_due(&conn, &app, &data_dir);
+    });
+}
+
+fn sync_due(conn: &Arc<Mutex<Connection>>, app: &AppHandle, data_dir: &std::path::Path) {
+    let now = chrono::Local::now().naive_local();
+    let now_iso = now.format("%Y-%m-%d %H:%M:%S").to_string();
+    let due = {
+        let guard = conn.lock().unwrap();
+        reminders_due_soon(&guard, &now_iso).unwrap_or_default()
+    };
+    for r in due {
+        let cfg = crate::config::load_config(data_dir);
+        crate::voice::reply::deliver_reply(app, data_dir, &cfg.reply_mode, format!("提醒：{}", r.content));
+        if let Ok(guard) = conn.lock() {
+            let _ = mark_notified(&guard, r.id);
+        }
+    }
+    let future = {
+        let guard = conn.lock().unwrap();
+        crate::db::reminders::list_future_reminders(&guard, &now_iso).unwrap_or_default()
+    };
+    for r in future {
+        if let Some(due_at) = r.due_at.clone() {
+            schedule_timer(conn.clone(), app.clone(), data_dir.to_path_buf(), r, due_at);
+        }
+    }
+}
+
+fn schedule_timer(
+    conn: Arc<Mutex<Connection>>,
+    app: AppHandle,
+    data_dir: std::path::PathBuf,
+    reminder: ReminderRow,
+    due_at: String,
+) {
+    tauri::async_runtime::spawn(async move {
+        let wait = match NaiveDateTime::parse_from_str(&due_at, "%Y-%m-%d %H:%M:%S") {
+            Ok(dt) => {
                 let now = chrono::Local::now().naive_local();
-                let now_iso = now.format("%Y-%m-%d %H:%M:%S").to_string();
-                if let Ok(reminders) = reminders_due_soon(&guard, &now_iso) {
-                    let due = due_reminders_for_notification(&reminders, now);
-                    for r in due {
-                        let cfg = crate::config::load_config(&data_dir);
-                        crate::voice::reply::deliver_reply(
-                            &app,
-                            &data_dir,
-                            &cfg.reply_mode,
-                            format!("提醒：{}", r.content),
-                        );
-                        let _ = mark_notified(&guard, r.id);
-                    }
-                }
+                (dt - now).to_std().unwrap_or_default()
             }
-            std::thread::sleep(std::time::Duration::from_secs(60));
+            Err(_) => std::time::Duration::ZERO,
+        };
+        tokio::time::sleep(wait).await;
+        let still_pending = {
+            let guard = conn.lock().unwrap();
+            matches!(
+                crate::db::reminders::get_reminder(&guard, reminder.id),
+                Ok(Some(r)) if r.status == "pending"
+            )
+        };
+        if still_pending {
+            let cfg = crate::config::load_config(&data_dir);
+            crate::voice::reply::deliver_reply(
+                &app,
+                &data_dir,
+                &cfg.reply_mode,
+                format!("提醒：{}", reminder.content),
+            );
+            if let Ok(guard) = conn.lock() {
+                let _ = mark_notified(&guard, reminder.id);
+            }
         }
     });
 }

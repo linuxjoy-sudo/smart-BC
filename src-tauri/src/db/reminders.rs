@@ -49,6 +49,15 @@ pub fn list_reminders(conn: &Connection) -> Result<Vec<ReminderRow>> {
     rows.collect()
 }
 
+pub fn get_reminder(conn: &Connection, id: i64) -> Result<Option<ReminderRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, content, due_at, status, needs_time, conversation_id
+         FROM reminders WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query_map(params![id], map_row)?;
+    rows.next().transpose()
+}
+
 pub fn set_status(conn: &Connection, id: i64, status: &str) -> Result<()> {
     match status {
         "pending" | "done" | "expired" => {}
@@ -64,6 +73,18 @@ pub fn reminders_due_soon(conn: &Connection, now_iso: &str) -> Result<Vec<Remind
          FROM reminders
          WHERE status = 'pending' AND notified_at IS NULL AND due_at IS NOT NULL
            AND due_at <= ?1
+         ORDER BY due_at ASC",
+    )?;
+    let rows = stmt.query_map(params![now_iso], map_row)?;
+    rows.collect()
+}
+
+pub fn list_future_reminders(conn: &Connection, now_iso: &str) -> Result<Vec<ReminderRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, content, due_at, status, needs_time, conversation_id
+         FROM reminders
+         WHERE status = 'pending' AND notified_at IS NULL AND due_at IS NOT NULL
+           AND due_at > ?1
          ORDER BY due_at ASC",
     )?;
     let rows = stmt.query_map(params![now_iso], map_row)?;

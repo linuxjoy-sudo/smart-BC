@@ -82,11 +82,23 @@ fn parse_relative_days(s: &str) -> Option<i64> {
 }
 
 fn extract_number(s: &str) -> Option<i64> {
-    s.chars()
-        .filter(|c| c.is_ascii_digit())
-        .collect::<String>()
-        .parse()
-        .ok()
+    let digits: String = s.chars().filter(|c| c.is_ascii_digit()).collect();
+    if !digits.is_empty() {
+        return digits.parse().ok();
+    }
+    match s.chars().find(|c| "一二两三四五六七八九十".contains(*c)) {
+        Some('一') => Some(1),
+        Some('二') | Some('两') => Some(2),
+        Some('三') => Some(3),
+        Some('四') => Some(4),
+        Some('五') => Some(5),
+        Some('六') => Some(6),
+        Some('七') => Some(7),
+        Some('八') => Some(8),
+        Some('九') => Some(9),
+        Some('十') => Some(10),
+        _ => None,
+    }
 }
 
 fn weekday_from_str(s: &str) -> Option<Weekday> {
