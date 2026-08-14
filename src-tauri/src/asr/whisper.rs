@@ -49,15 +49,20 @@ impl Transcriber {
         params.set_n_threads(4);
         params.set_translate(false);
         params.set_no_context(true);
-        params.set_no_speech_thold(0.9);
+        params.set_no_speech_thold(0.6);
         params.set_temperature(0.0);
-        params.set_initial_prompt("以下是简体中文对话：");
         state
             .full(params, &mono)
             .map_err(|e| format!("whisper run: {e}"))?;
+        if state.full_n_segments() == 0 {
+            return Ok(String::new());
+        }
         let mut text = String::new();
         for i in 0..state.full_n_segments() {
             if let Some(seg) = state.get_segment(i) {
+                if seg.no_speech_probability() > 0.9 {
+                    continue;
+                }
                 text.push_str(seg.to_str().map_err(|e| e.to_string())?);
             }
         }
@@ -68,7 +73,7 @@ impl Transcriber {
 /// 音量归一化：弱麦克风输入（RMS 偏低）放大到合理水平，改善 whisper 识别。
 fn normalize_volume(mono: &[f32]) -> Vec<f32> {
     const TARGET_RMS: f32 = 0.2;
-    const MAX_GAIN: f32 = 8.0;
+    const MAX_GAIN: f32 = 4.0;
     if mono.is_empty() {
         return Vec::new();
     }

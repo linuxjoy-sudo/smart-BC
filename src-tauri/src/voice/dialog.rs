@@ -155,22 +155,26 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                     let throttled = last_wake_check.elapsed().as_secs_f64() < 2.0;
                     if burst_rms > 0.01 && buf_ms >= 300 && !throttled {
                         last_wake_check = Instant::now();
-                        let chunk: Vec<f32> = buf.split_off(buf.len().saturating_sub(sr * 5));
-                        log_line(&state.data_dir, &format!("唤醒转写: chunk_ms={} 开始", chunk.len() * 1000 / sr));
-                        let t0 = Instant::now();
-                        match wake_transcriber.transcribe_with_state(&mut wake_state, listener.sample_rate, &chunk) {
-                            Ok(t) => {
-                                let matched = contains_wake_word(&t, &wake_word);
-                                log_line(&state.data_dir, &format!("唤醒转写文本: {t:?} matched={matched} (耗时 {:?})", t0.elapsed()));
-                                if matched {
-                                    state_machine = transition(state_machine, DialogEvent::WakeWordHit);
-                                    active_start = Instant::now();
-                                    silence_since = Instant::now();
-                                    log_line(&state.data_dir, "唤醒命中 → Active，发送\"在呢，请说\"回复");
-                                    crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
+                        let chunk = trim_to_voice(&buf, sr);
+                        if chunk.is_empty() {
+                            log_line(&state.data_dir, "语音段为空，跳过唤醒转写");
+                        } else {
+                            log_line(&state.data_dir, &format!("唤醒转写: chunk_ms={} 开始", chunk.len() * 1000 / sr));
+                            let t0 = Instant::now();
+                            match wake_transcriber.transcribe_with_state(&mut wake_state, listener.sample_rate, &chunk) {
+                                Ok(t) => {
+                                    let matched = contains_wake_word(&t, &wake_word);
+                                    log_line(&state.data_dir, &format!("唤醒转写文本: {t:?} matched={matched} (耗时 {:?})", t0.elapsed()));
+                                    if matched {
+                                        state_machine = transition(state_machine, DialogEvent::WakeWordHit);
+                                        active_start = Instant::now();
+                                        silence_since = Instant::now();
+                                        log_line(&state.data_dir, "唤醒命中 → Active，发送\"在呢，请说\"回复");
+                                        crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
+                                    }
                                 }
+                                Err(e) => log_error(&state.data_dir, &format!("唤醒转写失败: {e} (耗时 {:?})", t0.elapsed())),
                             }
-                            Err(e) => log_error(&state.data_dir, &format!("唤醒转写失败: {e} (耗时 {:?})", t0.elapsed())),
                         }
                     } else if throttled {
                         log_line(&state.data_dir, "唤醒转写节流跳过（距上次 <2s）");
@@ -303,6 +307,31 @@ pub fn process_transcript(
             crate::commands::query::answer_question_core(conn, llm, text)?,
         )),
     }
+}
+
+fn trim_to_voice(buf: &[f32], sr: usize) -> Vec<f32> {
+    const THRESHOLD: f32 = 0.02;
+    let frame_len = (sr / 100).max(1);
+    let frame_count = buf.len() / frame_len;
+    let mut first: Option<usize> = None;
+    let mut last: Option<usize> = None;
+    for i in 0..frame_count {
+        let frame = &buf[i * frame_len..(i + 1) * frame_len];
+        if crate::voice::vad::rms(frame) > THRESHOLD {
+            if first.is_none() {
+                first = Some(i);
+            }
+            last = Some(i);
+        }
+    }
+    let (f, l) = match (first, last) {
+        (Some(f), Some(l)) => (f, l),
+        _ => return Vec::new(),
+    };
+    let pad = frame_len * 15;
+    let start = f * frame_len - pad.min(f * frame_len);
+    let end = ((l + 1) * frame_len + pad).min(buf.len());
+    buf[start..end].to_vec()
 }
 
 fn build_record_message(ext: &crate::memory::types::MemoryExtraction) -> String {
