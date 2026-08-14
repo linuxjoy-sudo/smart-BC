@@ -13,6 +13,32 @@ pub fn listener_running() -> bool {
     LISTENER_RUNNING.load(Ordering::Acquire)
 }
 
+pub fn restart_listener(app: &tauri::AppHandle, state: &AppState) -> Result<(), String> {
+    use std::time::Duration;
+    let mut cfg = crate::config::load_config(&state.data_dir);
+    if !cfg.voice_assistant_enabled {
+        return Ok(());
+    }
+    cfg.voice_assistant_enabled = false;
+    crate::config::save_config(&state.data_dir, &cfg)?;
+    for _ in 0..40 {
+        if !listener_running() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let st = state.clone();
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        let mut cfg2 = crate::config::load_config(&st.data_dir);
+        cfg2.voice_assistant_enabled = true;
+        let _ = crate::config::save_config(&st.data_dir, &cfg2);
+        try_start_listener(app2, st);
+    });
+    Ok(())
+}
+
 pub fn try_start_listener(app: tauri::AppHandle, state: AppState) -> bool {
     if state.recorder.lock().unwrap().is_some() {
         crate::voice::log::log_error(&state.data_dir, "try_start_listener: 正在录音中，拒绝启动监听");

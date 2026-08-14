@@ -35,3 +35,13 @@ fn unsupported_returns_none() {
     assert_eq!(parse_due("尽快", now()), None);
     assert_eq!(parse_due("", now()), None);
 }
+
+#[test]
+fn relative_minutes_hours_days() {
+    let base = now();
+    assert_eq!(parse_due("1分钟后", base), base.checked_add_signed(chrono::Duration::minutes(1)));
+    assert_eq!(parse_due("10分钟", base), base.checked_add_signed(chrono::Duration::minutes(10)));
+    assert_eq!(parse_due("半小时后", base), base.checked_add_signed(chrono::Duration::minutes(30)));
+    assert_eq!(parse_due("2小时后", base), base.checked_add_signed(chrono::Duration::hours(2)));
+    assert_eq!(parse_due("3天后", base), base.checked_add_signed(chrono::Duration::days(3)));
+}

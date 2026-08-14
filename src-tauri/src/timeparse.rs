@@ -7,6 +7,16 @@ pub fn parse_due(expr: &str, now: NaiveDateTime) -> Option<NaiveDateTime> {
     if s.is_empty() {
         return None;
     }
+    // 相对时间：N分钟后/N小时后/N天后/半小时
+    if let Some(m) = parse_relative_minutes(s) {
+        return now.checked_add_signed(chrono::Duration::minutes(m));
+    }
+    if let Some(h) = parse_relative_hours(s) {
+        return now.checked_add_signed(chrono::Duration::hours(h));
+    }
+    if let Some(d) = parse_relative_days(s) {
+        return now.checked_add_signed(chrono::Duration::days(d));
+    }
     let today = now.date();
     let weekday_names = ["一", "二", "三", "四", "五", "六", "日", "天"];
 
@@ -45,6 +55,38 @@ pub fn parse_due(expr: &str, now: NaiveDateTime) -> Option<NaiveDateTime> {
     // 时间
     let time = parse_time(s, date == today, now);
     Some(date.and_time(time))
+}
+
+fn parse_relative_minutes(s: &str) -> Option<i64> {
+    if s.contains("半小时") {
+        return Some(30);
+    }
+    if s.contains("分钟") {
+        return extract_number(s);
+    }
+    None
+}
+
+fn parse_relative_hours(s: &str) -> Option<i64> {
+    if s.contains("小时") {
+        return extract_number(s);
+    }
+    None
+}
+
+fn parse_relative_days(s: &str) -> Option<i64> {
+    if s.contains("天后") {
+        return extract_number(s);
+    }
+    None
+}
+
+fn extract_number(s: &str) -> Option<i64> {
+    s.chars()
+        .filter(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()
 }
 
 fn weekday_from_str(s: &str) -> Option<Weekday> {

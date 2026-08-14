@@ -29,12 +29,17 @@ pub fn get_config(state: tauri::State<'_, AppState>) -> Result<Config, String> {
 
 #[tauri::command]
 pub fn save_input_device(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     index: Option<usize>,
 ) -> Result<(), String> {
     let mut cfg = crate::config::load_config(&state.data_dir);
     cfg.input_device = index;
-    save_config(&state.data_dir, &cfg)
+    crate::config::save_config(&state.data_dir, &cfg)?;
+    if cfg.voice_assistant_enabled {
+        crate::commands::voice::restart_listener(&app, state.inner())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
