@@ -196,22 +196,23 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                         let sentence: Vec<f32> = std::mem::take(&mut buf);
                         if !sentence.is_empty() && rms(&sentence) > 0.01 {
                             state_machine = transition(state_machine, DialogEvent::SentenceEnd);
-                            log_line(&state.data_dir, &format!("断句转写: sentence_ms={} 开始", sentence.len() * 1000 / sr));
                             let t0 = Instant::now();
-                            let transcribed = transcriber.transcribe_with_state(&mut sentence_state, listener.sample_rate, &sentence);
-                            log_line(&state.data_dir, &format!("断句转写完成 (耗时 {:?})", t0.elapsed()));
-                            let re_wake = match &transcribed {
-                                Ok(text) => {
-                                    contains_wake_word(text, &wake_word)
-                                        && text.chars().count() <= wake_word.chars().count() * 2
+                            // 先用 base 快速检测唤醒词，命中则直接重置窗口（避免 small 慢转写）
+                            let wake_text = wake_transcriber.transcribe_with_state(&mut wake_state, listener.sample_rate, &sentence);
+                            let re_wake = match &wake_text {
+                                Ok(t) => {
+                                    contains_wake_word(t, &wake_word)
+                                        && t.chars().count() <= wake_word.chars().count() * 2
                                 }
                                 Err(_) => false,
                             };
                             if re_wake {
-                                log_line(&state.data_dir, "重复唤醒词 → 重置聆听窗口，不问答");
+                                log_line(&state.data_dir, &format!("重复唤醒词（base 快速检测，耗时 {:?}）→ 重置聆听窗口", t0.elapsed()));
                                 state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                 crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
                             } else {
+                                let transcribed = transcriber.transcribe_with_state(&mut sentence_state, listener.sample_rate, &sentence);
+                                log_line(&state.data_dir, &format!("断句转写完成 (耗时 {:?})", t0.elapsed()));
                                 let result = match transcribed {
                                     Ok(text) => {
                                         log_line(&state.data_dir, &format!("转写: {text:?}"));
