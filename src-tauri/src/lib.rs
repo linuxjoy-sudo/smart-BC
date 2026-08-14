@@ -84,7 +84,7 @@ pub fn run() {
             if let Some(state) = app.try_state::<AppState>() {
                 let conn_arc = state.conn.clone();
                 let handle = app.handle().clone();
-                scheduler::spawn(conn_arc, handle);
+                scheduler::spawn(conn_arc, handle, state.data_dir.clone());
                 if crate::commands::voice::voice_assistant_enabled(&state.data_dir) {
                     crate::commands::voice::try_start_listener(app.handle().clone(), state.inner().clone());
                 }

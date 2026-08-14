@@ -3,7 +3,6 @@ use chrono::{Duration, NaiveDateTime};
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
-use tauri_plugin_notification::NotificationExt;
 pub fn due_reminders_for_notification(reminders: &[ReminderRow], now: NaiveDateTime) -> Vec<ReminderRow> {
     let cutoff = now + Duration::minutes(15);
     reminders
@@ -30,7 +29,11 @@ pub fn mark_notified(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     Ok(())
 }
 
-pub fn spawn(conn: Arc<Mutex<Connection>>, app: AppHandle) {
+pub fn spawn(
+    conn: Arc<Mutex<Connection>>,
+    app: AppHandle,
+    data_dir: std::path::PathBuf,
+) {
     std::thread::spawn(move || {
         loop {
             {
@@ -40,11 +43,13 @@ pub fn spawn(conn: Arc<Mutex<Connection>>, app: AppHandle) {
                 if let Ok(reminders) = reminders_due_soon(&guard, &now_iso) {
                     let due = due_reminders_for_notification(&reminders, now);
                     for r in due {
-                        let _ = app.notification()
-                            .builder()
-                            .title("SmartBC 提醒")
-                            .body(&r.content)
-                            .show();
+                        let cfg = crate::config::load_config(&data_dir);
+                        crate::voice::reply::deliver_reply(
+                            &app,
+                            &data_dir,
+                            &cfg.reply_mode,
+                            format!("提醒：{}", r.content),
+                        );
                         let _ = mark_notified(&guard, r.id);
                     }
                 }
