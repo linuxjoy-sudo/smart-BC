@@ -5,6 +5,7 @@ pub fn migrate(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
             transcript TEXT NOT NULL,
+            summary TEXT,
             audio_path TEXT
         );
         CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
@@ -52,5 +53,14 @@ pub fn migrate(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
             created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
         );
         "#,
-    )
+    )?;
+    // 迁移：旧库 conversations 补 summary 列
+    let cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(conversations)")?
+        .query_map([], |r| r.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?;
+    if !cols.iter().any(|c| c == "summary") {
+        conn.execute_batch("ALTER TABLE conversations ADD COLUMN summary TEXT")?;
+    }
+    Ok(())
 }

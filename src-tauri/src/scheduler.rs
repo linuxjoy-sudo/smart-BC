@@ -1,6 +1,7 @@
 use crate::db::reminders::{ReminderRow, reminders_due_soon};
 use chrono::{Duration, NaiveDateTime};
 use rusqlite::Connection;
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 pub fn due_reminders_for_notification(reminders: &[ReminderRow], now: NaiveDateTime) -> Vec<ReminderRow> {
@@ -35,11 +36,16 @@ pub fn spawn(
     data_dir: std::path::PathBuf,
 ) {
     std::thread::spawn(move || {
-        sync_due(&conn, &app, &data_dir);
+        // 循环扫描：覆盖启动后新增的提醒（30s 内发现并调度）
+        let mut scheduled: HashSet<i64> = HashSet::new();
+        loop {
+            sync_due(&conn, &app, &data_dir, &mut scheduled);
+            std::thread::sleep(std::time::Duration::from_secs(30));
+        }
     });
 }
 
-fn sync_due(conn: &Arc<Mutex<Connection>>, app: &AppHandle, data_dir: &std::path::Path) {
+fn sync_due(conn: &Arc<Mutex<Connection>>, app: &AppHandle, data_dir: &std::path::Path, scheduled: &mut HashSet<i64>) {
     let now = chrono::Local::now().naive_local();
     let now_iso = now.format("%Y-%m-%d %H:%M:%S").to_string();
     let due = {
@@ -58,8 +64,10 @@ fn sync_due(conn: &Arc<Mutex<Connection>>, app: &AppHandle, data_dir: &std::path
         crate::db::reminders::list_future_reminders(&guard, &now_iso).unwrap_or_default()
     };
     for r in future {
-        if let Some(due_at) = r.due_at.clone() {
-            schedule_timer(conn.clone(), app.clone(), data_dir.to_path_buf(), r, due_at);
+        if scheduled.insert(r.id) {
+            if let Some(due_at) = r.due_at.clone() {
+                schedule_timer(conn.clone(), app.clone(), data_dir.to_path_buf(), r, due_at);
+            }
         }
     }
 }

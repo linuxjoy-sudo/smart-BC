@@ -30,10 +30,10 @@ pub fn list_conversations(state: tauri::State<'_, AppState>) -> Result<Vec<Conve
 
 pub fn list_conversations_impl(conn: &rusqlite::Connection) -> Result<Vec<ConversationRow>, String> {
     let mut stmt = conn.prepare(
-        "SELECT id, created_at, transcript, audio_path FROM conversations ORDER BY id DESC LIMIT 100",
+        "SELECT id, created_at, transcript, summary, audio_path FROM conversations ORDER BY id DESC LIMIT 100",
     ).map_err(|e| e.to_string())?;
     let rows = stmt.query_map([], |r| Ok(ConversationRow {
-        id: r.get(0)?, created_at: r.get(1)?, transcript: r.get(2)?, audio_path: r.get(3)?,
+        id: r.get(0)?, created_at: r.get(1)?, transcript: r.get(2)?, summary: r.get(3)?, audio_path: r.get(4)?,
     })).map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<ConversationRow>, _>>().map_err(|e| e.to_string())
 }

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export interface RecordResult { conversation_id: number; transcript: string; }
-export interface ConversationRow { id: number; created_at: string; transcript: string; audio_path: string | null; }
+export interface ConversationRow { id: number; created_at: string; transcript: string; summary: string | null; audio_path: string | null; }
 export interface ReminderRow { id: number; content: string; due_at: string | null; status: string; needs_time: boolean; conversation_id: number; }
 export interface PersonRow { id: number; name: string; relation: string; note: string; conversation_id: number; }
 export interface PreferenceRow { id: number; topic: string; value: string; conversation_id: number; }

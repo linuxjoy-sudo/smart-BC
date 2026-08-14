@@ -316,16 +316,20 @@ pub fn process_transcript(
                     .map_err(|e| format!("记忆入库失败: {e}"))?;
             }
             if has_content {
-                Ok(TranscriptOutcome::Recorded(build_record_message(&ext)))
+                let msg = build_record_message(&ext);
+                let _ = crate::db::conversations::update_summary(conn, result.conversation_id, &msg);
+                Ok(TranscriptOutcome::Recorded(msg))
             } else {
-                Ok(TranscriptOutcome::Answered(
-                    crate::commands::query::answer_question_core(conn, llm, text)?,
-                ))
+                let ans = crate::commands::query::answer_question_core(conn, llm, text)?;
+                let _ = crate::db::conversations::update_summary(conn, result.conversation_id, &ans);
+                Ok(TranscriptOutcome::Answered(ans))
             }
         }
-        Err(_e) => Ok(TranscriptOutcome::Answered(
-            crate::commands::query::answer_question_core(conn, llm, text)?,
-        )),
+        Err(_e) => {
+            let ans = crate::commands::query::answer_question_core(conn, llm, text)?;
+            let _ = crate::db::conversations::update_summary(conn, result.conversation_id, &ans);
+            Ok(TranscriptOutcome::Answered(ans))
+        }
     }
 }
 

@@ -18,7 +18,7 @@ export default function HistoryPage() {
         {items.map((c) => (
           <li key={c.id} className="item">
             <span className="time">{c.created_at}</span>
-            <p>{c.transcript}</p>
+            <p>{c.summary || c.transcript}</p>
           </li>
         ))}
       </ul>
