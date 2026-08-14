@@ -48,6 +48,15 @@ pub fn spawn(
 fn sync_due(conn: &Arc<Mutex<Connection>>, app: &AppHandle, data_dir: &std::path::Path, scheduled: &mut HashSet<i64>) {
     let now = chrono::Local::now().naive_local();
     let now_iso = now.format("%Y-%m-%d %H:%M:%S").to_string();
+    // 已通知超过1天仍未完成的提醒自动流转 expired
+    if let Ok(guard) = conn.lock() {
+        let _ = guard.execute(
+            "UPDATE reminders SET status = 'expired'
+             WHERE status = 'pending' AND notified_at IS NOT NULL
+               AND due_at IS NOT NULL AND due_at < datetime('now', 'localtime', '-1 day')",
+            [],
+        );
+    }
     let due = {
         let guard = conn.lock().unwrap();
         reminders_due_soon(&guard, &now_iso).unwrap_or_default()

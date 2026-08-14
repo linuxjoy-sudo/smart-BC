@@ -61,3 +61,9 @@ pub fn complete_reminder(state: tauri::State<'_, AppState>, id: i64) -> Result<(
     let conn = state.conn.lock().unwrap();
     crate::db::reminders::set_status(&conn, id, "done").map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn update_reminder_due(state: tauri::State<'_, AppState>, id: i64, due_at: String) -> Result<(), String> {
+    let conn = state.conn.lock().unwrap();
+    crate::db::reminders::update_due(&conn, id, &due_at).map_err(|e| e.to_string())
+}

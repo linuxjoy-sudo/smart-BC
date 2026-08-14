@@ -24,6 +24,7 @@ export const api = {
   listPeople: () => invoke<PersonRow[]>("list_people_cmd"),
   listPreferences: () => invoke<PreferenceRow[]>("list_preferences_cmd"),
   completeReminder: (id: number) => invoke<void>("complete_reminder", { id }),
+  updateReminderDue: (id: number, dueAt: string) => invoke<void>("update_reminder_due", { id, dueAt }),
   saveApiKey: (key: string) => invoke<void>("save_api_key", { key }),
   getConfig: () => invoke<Config>("get_config"),
   clearAllData: () => invoke<void>("clear_all_data"),

@@ -76,6 +76,23 @@ pub fn set_status(conn: &Connection, id: i64, status: &str) -> Result<()> {
     Ok(())
 }
 
+pub fn update_due(conn: &Connection, id: i64, due_at: &str) -> Result<()> {
+    let now = chrono::Local::now().naive_local();
+    let parsed = parse_due(due_at, now)
+        .or_else(|| NaiveDateTime::parse_from_str(due_at, "%Y-%m-%dT%H:%M").ok())
+        .or_else(|| NaiveDateTime::parse_from_str(due_at, "%Y-%m-%d %H:%M:%S").ok())
+        .or_else(|| NaiveDateTime::parse_from_str(due_at, "%Y-%m-%d %H:%M").ok());
+    let dt = match parsed {
+        Some(dt) => dt.format("%Y-%m-%d %H:%M:%S").to_string(),
+        None => return Err(rusqlite::Error::InvalidParameterName("bad due format".into())),
+    };
+    conn.execute(
+        "UPDATE reminders SET due_at = ?1, needs_time = 0 WHERE id = ?2",
+        params![dt, id],
+    )?;
+    Ok(())
+}
+
 pub fn reminders_due_soon(conn: &Connection, now_iso: &str) -> Result<Vec<ReminderRow>> {
     let mut stmt = conn.prepare(
         "SELECT id, content, due_at, status, needs_time, conversation_id

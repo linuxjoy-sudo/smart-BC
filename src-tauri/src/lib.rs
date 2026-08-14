@@ -103,6 +103,7 @@ pub fn run() {
             commands::query::list_people_cmd,
             commands::query::list_preferences_cmd,
             commands::query::complete_reminder,
+            commands::query::update_reminder_due,
             commands::settings::save_api_key,
             commands::settings::get_config,
             commands::settings::save_input_device,
