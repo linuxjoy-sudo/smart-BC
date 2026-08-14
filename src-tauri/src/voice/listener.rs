@@ -58,6 +58,7 @@ impl Listener {
             .default_input_config()
             .map_err(|e| format!("input config: {e}"))?;
         let sample_rate = config.sample_rate();
+        let channels = config.channels() as usize;
         let buffer = Arc::new(Mutex::new(RingBuffer::new(buffer_secs, sample_rate)));
         let buf_cb = Arc::clone(&buffer);
         let stream = device
@@ -65,7 +66,13 @@ impl Listener {
                 config.into(),
                 move |data: &[f32], _| {
                     if let Ok(mut b) = buf_cb.lock() {
-                        b.push(data);
+                        if channels <= 1 {
+                            b.push(data);
+                        } else {
+                            // 立体声/多声道输入：去交错取第一声道，避免内容错乱
+                            let mono: Vec<f32> = data.iter().step_by(channels).copied().collect();
+                            b.push(&mono);
+                        }
                     }
                 },
                 move |err| eprintln!("voice listener stream error: {err}"),
