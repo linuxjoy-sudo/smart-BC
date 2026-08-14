@@ -68,7 +68,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
     std::thread::sleep(Duration::from_millis(1500));
     let init_level = rms(&listener.buffer.lock().unwrap().snapshot());
     log_line(&state.data_dir, &format!("启动拾音电平: {init_level:.4}"));
-    if init_level < 0.005 {
+    if init_level < 0.002 {
         log_error(&state.data_dir, "麦克风未拾音（检查 Windows 隐私-麦克风权限，或设备未工作）");
         if let Err(ne) = app.notification()
             .builder()

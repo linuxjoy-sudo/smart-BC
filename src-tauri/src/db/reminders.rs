@@ -1,5 +1,6 @@
 use crate::memory::types::ReminderExtract;
 use crate::timeparse::parse_due;
+use chrono::NaiveDateTime;
 use rusqlite::{params, Connection, Result};
 use serde::Serialize;
 
@@ -26,7 +27,15 @@ pub fn save_reminders(
             Some(d) => {
                 match parse_due(d, now) {
                     Some(dt) => (Some(dt.format("%Y-%m-%d %H:%M:%S").to_string()), false),
-                    None => (Some(d.clone()), true),
+                    None => {
+                        // 兜底：LLM 可能输出 ISO 日期
+                        match NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M:%S")
+                            .or_else(|_| NaiveDateTime::parse_from_str(d, "%Y-%m-%dT%H:%M:%S"))
+                        {
+                            Ok(dt) => (Some(dt.format("%Y-%m-%d %H:%M:%S").to_string()), false),
+                            Err(_) => (Some(d.clone()), true),
+                        }
+                    }
                 }
             }
             None => (None, true),

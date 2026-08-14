@@ -7,7 +7,7 @@ pub fn build_extract_prompt(transcript: &str) -> String {
 输出格式（缺失项给空数组或 null）：
 {{
   "people": [{{"name": "人名", "relation": "关系(可选)", "note": "备注(可选)"}}],
-  "reminders": [{{"content": "承诺/待办内容", "due": "截止时间，ISO 日期或 null"}}],
+  "reminders": [{{"content": "承诺/待办内容", "due": "时间表达：直接抄录用户说的相对时间原文（如'3分钟后'、'明天早上9点'、'后天下午3点'、'周五晚上'），没有明确时间则 null"}}],
   "preferences": [{{"topic": "偏好主题", "value": "偏好内容"}}],
   "episode": {{"summary": "本次事件摘要", "people": ["人物"], "place": "地点或 null"}}
 }}
