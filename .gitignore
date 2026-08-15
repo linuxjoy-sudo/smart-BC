@@ -27,3 +27,12 @@ dist-ssr
 .env
 smartbc.db
 src-tauri/target
+
+# 本地工具/规范文件（不推送）
+.omo/
+.opencode/
+openspec/
+AGENTS.MD
+
+# 测试录音（隐私）
+*.m4a
