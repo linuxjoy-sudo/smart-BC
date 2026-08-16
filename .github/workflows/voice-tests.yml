@@ -14,8 +14,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cmake (whisper-rs dep)
-        run: sudo apt-get update && sudo apt-get install -y cmake
+      - name: Install system deps (tauri + whisper-rs)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - name: Restore whisper models cache
         id: model-cache
@@ -54,8 +56,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install cmake
-        run: sudo apt-get update && sudo apt-get install -y cmake
+      - name: Install system deps (tauri + whisper-rs)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - name: Restore cargo cache
         uses: actions/cache@v4
         with:
