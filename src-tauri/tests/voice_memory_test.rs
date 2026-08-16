@@ -22,8 +22,8 @@ impl LlmProvider for MockProvider {
     }
 }
 
-fn reminder_reply(content: &str) -> serde_json::Value {
-    serde_json::json!({"people": [], "reminders": [{"content": content, "due": null}], "preferences": [], "episode": null})
+fn reminder_reply(content: &str, due: Option<&str>) -> serde_json::Value {
+    serde_json::json!({"people": [], "reminders": [{"content": content, "due": due}], "preferences": [], "episode": null})
 }
 
 fn empty_reply() -> serde_json::Value {
@@ -37,7 +37,7 @@ fn answer_reply() -> serde_json::Value {
 #[test]
 fn records_reminder_instruction() {
     let conn = mem_conn();
-    let p = MockProvider { reply: RefCell::new(reminder_reply("明天中午12点提醒我去吃饭")), calls: RefCell::new(0) };
+    let p = MockProvider { reply: RefCell::new(reminder_reply("明天中午12点提醒我去吃饭", Some("明天中午12点"))), calls: RefCell::new(0) };
     let out = process_transcript(&conn, &p, "明天中午12点提醒我去吃饭").unwrap();
     match out {
         TranscriptOutcome::Recorded(msg) => assert!(msg.contains("提醒")),
@@ -46,6 +46,24 @@ fn records_reminder_instruction() {
     let reminders = db::reminders::list_reminders(&conn).unwrap();
     assert!(!reminders.is_empty(), "提醒应入库");
     assert!(reminders[0].content.contains("提醒我去吃饭"));
+}
+
+#[test]
+fn no_time_reminder_returns_needs_time() {
+    let conn = mem_conn();
+    // due=null → 无时间提醒 → NeedsTime 语音追问
+    let p = MockProvider { reply: RefCell::new(reminder_reply("喝水", None)), calls: RefCell::new(0) };
+    let out = process_transcript(&conn, &p, "提醒我喝水").unwrap();
+    match out {
+        TranscriptOutcome::NeedsTime(id, content) => {
+            assert!(id > 0);
+            assert_eq!(content, "喝水");
+        }
+        _ => panic!("无时间提醒应返回 NeedsTime"),
+    }
+    let reminders = db::reminders::list_reminders(&conn).unwrap();
+    assert!(!reminders.is_empty(), "提醒应入库");
+    assert!(reminders[0].needs_time, "应标记 needs_time");
 }
 
 #[test]
