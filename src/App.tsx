@@ -10,7 +10,7 @@ import SettingsPage from "./pages/SettingsPage";
 const TABS = ["录音", "历史", "回忆", "人脉", "承诺", "设置"] as const;
 
 export default function App() {
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(window.location.hash === "#settings" ? 5 : 0);
 
   return (
     <div className="app">

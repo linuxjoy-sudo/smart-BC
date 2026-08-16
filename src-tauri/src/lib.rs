@@ -14,11 +14,48 @@ pub mod voice;
 
 use app_state::AppState;
 use std::sync::{Arc, Mutex};
+use tauri::menu::{Menu, MenuItem};
 use tauri::Manager;
 
 #[tauri::command]
 fn ping() -> String {
     "pong".into()
+}
+
+fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "open", "打开设置界面", true, None::<&str>)?;
+    let toggle = MenuItem::with_id(app, "toggle_voice", "语音助手：开", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &toggle, &quit])?;
+    let mut builder = tauri::tray::TrayIconBuilder::with_id("smartbc-tray")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "open" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                    let _ = w.eval("window.location.hash = '#settings'");
+                }
+            }
+            "toggle_voice" => {
+                if let Some(state) = app.try_state::<AppState>() {
+                    let enabled = !commands::voice::voice_assistant_enabled(&state.data_dir);
+                    let _ = commands::voice::set_voice_assistant(
+                        app.clone(),
+                        app.state::<AppState>(),
+                        enabled,
+                    );
+                }
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder.build(app)?;
+    Ok(())
 }
 
 fn cfg_uses_wake_model(data_dir: &std::path::Path) -> bool {
@@ -87,6 +124,15 @@ pub fn run() {
                 scheduler::spawn(conn_arc, handle, state.data_dir.clone());
                 if crate::commands::voice::voice_assistant_enabled(&state.data_dir) {
                     crate::commands::voice::try_start_listener(app.handle().clone(), state.inner().clone());
+                }
+                let _ = build_tray(app.handle());
+                // 首次引导：无 API key 或模型缺失 → 显示设置窗口
+                let cfg = crate::config::load_config(&state.data_dir);
+                let model_ok = crate::asr::model::model_path(&state.data_dir).exists();
+                if cfg.api_key.is_empty() || !model_ok {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.show();
+                    }
                 }
             }
             Ok(())

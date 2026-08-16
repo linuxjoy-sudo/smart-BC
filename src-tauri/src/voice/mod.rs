@@ -1,3 +1,4 @@
+pub mod commands;
 pub mod dialog;
 pub mod listener;
 pub mod reply;

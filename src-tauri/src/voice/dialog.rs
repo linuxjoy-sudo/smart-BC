@@ -301,6 +301,18 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                     }
                                     state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                 } else {
+                                    let system_cmd = match &transcribed {
+                                        Ok(text) => crate::voice::commands::parse_system_command(text),
+                                        Err(_) => crate::voice::commands::SystemCommand::None,
+                                    };
+                                    if !matches!(system_cmd, crate::voice::commands::SystemCommand::None) {
+                                        let conn = state.conn.lock().unwrap();
+                                        let msg = crate::voice::commands::execute_system_command(&app, &state, &conn, system_cmd);
+                                        drop(conn);
+                                        log_line(&state.data_dir, &format!("系统指令: {msg:?}"));
+                                        crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, msg);
+                                        state_machine = transition(state_machine, DialogEvent::ProcessedOk);
+                                    } else {
                                     let result = match transcribed {
                                         Ok(text) => {
                                             log_line(&state.data_dir, &format!("转写: {text:?}"));
@@ -333,6 +345,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                             }
                                             state_machine = transition(state_machine, DialogEvent::ProcessedErr);
                                         }
+                                    }
                                     }
                                 }
                             }
