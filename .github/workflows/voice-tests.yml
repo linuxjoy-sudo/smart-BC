@@ -40,13 +40,11 @@ jobs:
             src-tauri/target
           key: cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
 
-      - name: Voice chain tests (real ASR + state machine)
+      - name: Voice chain tests (real ASR + logic chain)
         working-directory: src-tauri
         env:
           SMARTBC_MODEL_DIR: ../models
-        # Phase 1: 新增 voice_chain_test.rs / dialog_loop_test.rs 后启用
-        # run: cargo test --test voice_chain_test --test dialog_loop_test -- --nocapture
-        run: echo "voice chain tests pending (Phase 1)"
+        run: cargo test --test voice_chain_test -- --nocapture
 
       - name: High-frequency targeted tests
         working-directory: src-tauri
