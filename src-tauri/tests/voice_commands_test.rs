@@ -15,6 +15,7 @@ fn is(cmd: SystemCommand, kind: &str) -> bool {
             | (SystemCommand::OpenUrl(_), "open_url")
             | (SystemCommand::Volume(_), "volume")
             | (SystemCommand::Mute(_), "mute")
+            | (SystemCommand::PlayMusic, "play_music")
             | (SystemCommand::MediaPlayPause, "media_pp")
             | (SystemCommand::MediaNext, "media_next")
             | (SystemCommand::MediaPrev, "media_prev")
@@ -68,15 +69,23 @@ fn parses_media_controls() {
 }
 
 #[test]
-fn parses_natural_media_phrases() {
-    assert!(is(parse_system_command("来点音乐"), "media_pp"));
-    assert!(is(parse_system_command("放首歌"), "media_pp"));
-    assert!(is(parse_system_command("放音乐"), "media_pp"));
-    assert!(is(parse_system_command("放点音乐"), "media_pp"));
-    assert!(is(parse_system_command("听歌"), "media_pp"));
-    assert!(is(parse_system_command("继续播放"), "media_pp"));
+fn parses_play_music_phrases() {
+    assert!(is(parse_system_command("来点音乐"), "play_music"));
+    assert!(is(parse_system_command("放首歌"), "play_music"));
+    assert!(is(parse_system_command("放音乐"), "play_music"));
+    assert!(is(parse_system_command("放点音乐"), "play_music"));
+    assert!(is(parse_system_command("听歌"), "play_music"));
+    assert!(is(parse_system_command("播放音乐"), "play_music"));
     // 偏好表达不误触
     assert!(is(parse_system_command("我喜欢听音乐"), "none"));
+}
+
+#[test]
+fn parses_toggle_only_media() {
+    assert!(is(parse_system_command("播放"), "media_pp"));
+    assert!(is(parse_system_command("暂停"), "media_pp"));
+    assert!(is(parse_system_command("继续"), "media_pp"));
+    assert!(is(parse_system_command("继续播放"), "media_pp"));
 }
 
 #[test]

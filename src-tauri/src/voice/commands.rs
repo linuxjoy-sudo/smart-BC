@@ -20,6 +20,7 @@ pub enum SystemCommand {
     OpenUrl(String),
     Volume(f32),
     Mute(bool),
+    PlayMusic,
     MediaPlayPause,
     MediaNext,
     MediaPrev,
@@ -94,17 +95,17 @@ pub fn parse_system_command(text: &str) -> SystemCommand {
         SystemCommand::MediaNext
     } else if t.contains("上一首") {
         SystemCommand::MediaPrev
-    } else if t.contains("播放")
+    } else if t.contains("来点音乐")
+        || t.contains("播放音乐")
         || t.contains("放音乐")
         || t.contains("放歌")
         || t.contains("放首")
         || t.contains("放点")
-        || t.contains("来点音乐")
         || t.contains("来首")
         || t.contains("听歌")
-        || t.contains("暂停")
-        || t.contains("继续")
     {
+        SystemCommand::PlayMusic
+    } else if t.contains("播放") || t.contains("暂停") || t.contains("继续") {
         SystemCommand::MediaPlayPause
     } else if t.contains("音量") {
         // "调高音量" / "调低音量" / "音量调到50" / "音量50"
@@ -179,6 +180,7 @@ pub fn execute_system_command<R: tauri::Runtime>(
         SystemCommand::OpenUrl(url) => crate::voice::launch::open_url(&url),
         SystemCommand::Volume(scale) => set_volume_cmd(scale),
         SystemCommand::Mute(mute) => set_mute_cmd(mute),
+        SystemCommand::PlayMusic => play_music(state),
         SystemCommand::MediaPlayPause => media_cmd("play_pause"),
         SystemCommand::MediaNext => media_cmd("next"),
         SystemCommand::MediaPrev => media_cmd("prev"),
@@ -200,6 +202,19 @@ fn launch_with(state: &AppState, app_name: &str, target: &str) -> String {
         return format!("没有找到应用「{}」，可在设置里配置", app_name);
     };
     crate::voice::launch::launch_with(cmd, target)
+}
+
+fn play_music(state: &AppState) -> String {
+    let launched = launch_app(state, "音乐");
+    if launched.starts_with("好的") {
+        // 启动播放器后发播放键（等应用起来再发，避免按键落空）
+        #[cfg(windows)]
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+        let _ = media_cmd("play_pause");
+        format!("{launched}，并已开始播放")
+    } else {
+        launched
+    }
 }
 
 fn set_volume_cmd(scale: f32) -> String {
