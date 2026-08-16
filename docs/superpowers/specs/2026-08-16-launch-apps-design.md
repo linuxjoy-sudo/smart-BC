@@ -47,6 +47,7 @@
 | 我的电脑 | explorer |
 | 命令提示符 | cmd |
 | 回收站 | explorer shell:RecycleBinFolder |
+| 音乐 / 媒体播放器 | wmplayer.exe（Windows 媒体播放器） |
 | 浏览器 | 默认浏览器（opener） |
 
 ### config.json 扩展（用户自定义）
