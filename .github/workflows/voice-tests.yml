@@ -1,0 +1,88 @@
+name: voice-tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  quick-regression:
+    name: Quick regression (voice chain + high-freq)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cmake (whisper-rs dep)
+        run: sudo apt-get update && sudo apt-get install -y cmake
+
+      - name: Restore whisper models cache
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: whisper-models-v1
+
+      - name: Download whisper models from Releases
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: bash scripts/download-models.sh
+
+      - name: Restore cargo/target cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            src-tauri/target
+          key: cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Voice chain tests (real ASR + state machine)
+        working-directory: src-tauri
+        env:
+          SMARTBC_MODEL_DIR: ../models
+        # Phase 1: 新增 voice_chain_test.rs / dialog_loop_test.rs 后启用
+        # run: cargo test --test voice_chain_test --test dialog_loop_test -- --nocapture
+        run: echo "voice chain tests pending (Phase 1)"
+
+      - name: High-frequency targeted tests
+        working-directory: src-tauri
+        run: cargo test --test wake_test --test vad_test --test timeparse_test
+
+  full-suite:
+    name: Full test suite + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cmake
+        run: sudo apt-get update && sudo apt-get install -y cmake
+      - name: Restore cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            src-tauri/target
+          key: cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - name: Run all tests
+        working-directory: src-tauri
+        run: cargo test
+      - name: Clippy (zero warnings gate)
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+  build-windows:
+    name: Build Windows release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup cmake
+        run: choco install cmake -y
+      - name: Install frontend deps
+        run: npm install
+      - name: Build (no bundle)
+        run: npm run tauri build -- --no-bundle
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smartbc-windows
+          path: src-tauri/target/release/smartbc.exe

@@ -45,7 +45,11 @@
 | 13 | 历史页显示 LLM 语义摘要（summary 列，与通知一致） | ✅ 完成 | `9dcf68e` | |
 | 14 | 麦克风未拾音误报修复（阈值 0.005→0.002） | ✅ 完成 | `18476b9` | |
 | 15 | README 功能/用法文档 | ✅ 完成 | `854028a` | |
-| 16 | GitHub 私有仓库推送 | ✅ 完成 | — | https://github.com/linuxjoy-sudo/smart-BC |
+| 16 | GitHub 私有仓库推送 | ✅ 完成 | — | https://github.com/linuxjoy-sudo/smart-BC（后改为公开） |
+| 17 | CI 流水线（GitHub Actions：快速回归 voice_chain + 全量 + 构建） | 🔄 进行中 | — | 设计见 [ci-pipeline-design.md](ci-pipeline-design.md) |
+| 18 | 方案 B：离线录音→ASR→全链路测试（voice_chain_test） | ⬜ 待实施 | — | CI Phase 1 |
+| 19 | 方案 D1：AudioFeed 抽象 + 进程内状态机测试（dialog_loop_test） | ⬜ 待实施 | — | CI Phase 2 |
+| 20 | 方案 C：VB-CABLE 开发机 E2E 冒烟脚本 | ⬜ 待实施 | — | CI Phase 3，不进 CI |
 
 ### 已实测验证
 - ✅ 唤醒功能正常（多次实测）
@@ -59,7 +63,6 @@
 | 转写质量进一步提升（medium 模型评估、重采样升级） | ⬜ 候选 | 用户提出过，未批准实施 |
 | 提醒提前通知语义确认 | ⬜ 候选 | 未批准 |
 | 界面语音优先精简 | ⬜ 候选 | 未批准 |
-
 ## 四、更新指引
 
 每次功能迭代后更新本文件：
