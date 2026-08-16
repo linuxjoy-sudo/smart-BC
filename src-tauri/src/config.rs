@@ -22,6 +22,8 @@ pub struct Config {
     pub reply_mode: String,
     #[serde(default)]
     pub app_commands: HashMap<String, String>,
+    #[serde(default)]
+    pub music_play_source: String,
 }
 
 fn default_reply_mode() -> String {
@@ -40,6 +42,7 @@ impl Default for Config {
             asr_model: String::new(),
             reply_mode: default_reply_mode(),
             app_commands: HashMap::new(),
+            music_play_source: String::new(),
         }
     }
 }

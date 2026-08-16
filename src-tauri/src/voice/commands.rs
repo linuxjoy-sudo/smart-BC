@@ -205,15 +205,17 @@ fn launch_with(state: &AppState, app_name: &str, target: &str) -> String {
 }
 
 fn play_music(state: &AppState) -> String {
-    let launched = launch_app(state, "音乐");
-    if launched.starts_with("好的") {
-        // 启动播放器后发播放键（等应用起来再发，避免按键落空）
-        #[cfg(windows)]
-        std::thread::sleep(std::time::Duration::from_millis(2500));
-        let _ = media_cmd("play_pause");
-        format!("{launched}，并已开始播放")
+    // 通过音乐播放协议直接唤起播放（orpheus://radio 私人 FM 打开即播），
+    // 不再依赖"启动 + 媒体键"（媒体键无法让无曲目的播放器开始播放）
+    let cfg = crate::config::load_config(&state.data_dir);
+    let source = if cfg.music_play_source.is_empty() {
+        "orpheus://radio"
     } else {
-        launched
+        cfg.music_play_source.as_str()
+    };
+    match opener::open(source) {
+        Ok(_) => "好的，已开始播放".into(),
+        Err(e) => format!("打开失败：{e}"),
     }
 }
 

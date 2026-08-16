@@ -66,6 +66,7 @@ fn voice_assistant_config_roundtrip() {
         wake_model: "base".into(),
         asr_model: "small".into(),
         app_commands: Default::default(),
+        music_play_source: String::new(),
         reply_mode: "notification".into(),
     };
     config::save_config(&dir, &cfg).unwrap();
