@@ -318,7 +318,11 @@ pub fn run_loop<R: tauri::Runtime>(
                                         }
                                         None => {
                                             if attempts < 2 {
-                                                log_line(&state.data_dir, &format!("补时间未解析，追问 {content}"));
+                                                let tx = match &transcribed {
+                                                    Ok(t) => format!("{t:?}"),
+                                                    Err(e) => format!("转写失败: {e}"),
+                                                };
+                                                log_line(&state.data_dir, &format!("补时间未解析（转写={tx}），追问 {content}"));
                                                 pending_time = Some((id, content, attempts + 1));
                                                 sink.deliver(&reply_mode, "没听清时间，请再说一次，比如'下午三点'".into());
                                             } else {

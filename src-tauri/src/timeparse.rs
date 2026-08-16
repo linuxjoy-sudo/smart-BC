@@ -61,10 +61,52 @@ fn parse_relative_minutes(s: &str) -> Option<i64> {
     if s.contains("半小时") {
         return Some(30);
     }
-    if s.contains("分钟") {
-        return extract_number(s);
+    // 优先"X分钟"，fallback"X分"（如"一分"）；钟点"X点Y分"排除（交给 parse_time）
+    for marker in ["分钟", "分"] {
+        if let Some(pos) = s.find(marker) {
+            let before = &s[..pos];
+            if marker == "分" && before.contains('点') {
+                continue;
+            }
+            if let Some(n) = extract_trailing_number(before) {
+                return Some(n);
+            }
+        }
     }
     None
+}
+
+/// 从 marker 前提取紧邻数字（阿拉伯多位 / 中文单个）
+fn extract_trailing_number(s: &str) -> Option<i64> {
+    let chars: Vec<char> = s.chars().rev().collect();
+    let mut ascii_digits = String::new();
+    for &c in &chars {
+        if c.is_ascii_digit() {
+            ascii_digits.insert(0, c);
+        } else {
+            break;
+        }
+    }
+    if !ascii_digits.is_empty() {
+        return ascii_digits.parse().ok();
+    }
+    chars.first().and_then(|&c| chinese_digit(c))
+}
+
+fn chinese_digit(c: char) -> Option<i64> {
+    match c {
+        '一' => Some(1),
+        '二' | '两' => Some(2),
+        '三' => Some(3),
+        '四' => Some(4),
+        '五' => Some(5),
+        '六' => Some(6),
+        '七' => Some(7),
+        '八' => Some(8),
+        '九' => Some(9),
+        '十' => Some(10),
+        _ => None,
+    }
 }
 
 fn parse_relative_hours(s: &str) -> Option<i64> {
@@ -144,16 +186,100 @@ fn parse_md(s: &str) -> Option<(u32, u32)> {
     Some((m, d_str.parse().ok()?))
 }
 
+/// 提取紧邻数字（阿拉伯多位 / 中文 1-2 字，如"三"=3、"十二"=12），用于钟点/分钟
+fn extract_clock_num(s: &str) -> Option<u32> {
+    let chars: Vec<char> = s.chars().rev().collect();
+    let mut ascii = String::new();
+    for &c in &chars {
+        if c.is_ascii_digit() {
+            ascii.insert(0, c);
+        } else {
+            break;
+        }
+    }
+    if !ascii.is_empty() {
+        return ascii.parse().ok();
+    }
+    let mut zh = String::new();
+    for &c in &chars {
+        if "一二两三四五六七八九十".contains(c) {
+            zh.insert(0, c);
+        } else {
+            break;
+        }
+    }
+    zh_num_parse(&zh)
+}
+
+fn zh_num_parse(s: &str) -> Option<u32> {
+    let d = |c: char| match c {
+        '一' | '幺' => Some(1),
+        '二' | '两' => Some(2),
+        '三' => Some(3),
+        '四' => Some(4),
+        '五' => Some(5),
+        '六' => Some(6),
+        '七' => Some(7),
+        '八' => Some(8),
+        '九' => Some(9),
+        _ => None,
+    };
+    let cs: Vec<char> = s.chars().collect();
+    match cs.len() {
+        1 => {
+            let c = cs[0];
+            if c == '十' {
+                Some(10)
+            } else {
+                d(c)
+            }
+        }
+        2 => {
+            if cs[0] == '十' {
+                d(cs[1]).map(|x| 10 + x)
+            } else if cs[1] == '十' {
+                d(cs[0]).map(|x| x * 10)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// 提取开头紧邻数字（阿拉伯多位 / 中文 1-2 字），用于"点"后的分钟
+fn extract_clock_num_prefix(s: &str) -> Option<u32> {
+    let chars: Vec<char> = s.chars().collect();
+    let mut ascii = String::new();
+    for &c in &chars {
+        if c.is_ascii_digit() {
+            ascii.push(c);
+        } else {
+            break;
+        }
+    }
+    if !ascii.is_empty() {
+        return ascii.parse().ok();
+    }
+    let mut zh = String::new();
+    for &c in &chars {
+        if "一二两三四五六七八九十".contains(c) {
+            zh.push(c);
+        } else {
+            break;
+        }
+    }
+    zh_num_parse(&zh)
+}
+
 fn parse_time(s: &str, is_today: bool, now: NaiveDateTime) -> NaiveTime {
     let hour_default = if is_today { 18 } else { 9 };
     let (mut h, m) = if let Some(pos) = s.find("点半") {
-        let before: String = s[..pos].chars().rev().take_while(|c| c.is_ascii_digit()).collect::<String>().chars().rev().collect();
-        (before.parse().unwrap_or(hour_default), 30)
+        (extract_clock_num(&s[..pos]).unwrap_or(hour_default), 30)
     } else if let Some(pos) = s.find('点') {
-        let before: String = s[..pos].chars().rev().take_while(|c| c.is_ascii_digit()).collect::<String>().chars().rev().collect();
-        let mut hh: u32 = before.parse().unwrap_or(hour_default);
-        let after: String = s[pos..].chars().skip(1).take_while(|c| c.is_ascii_digit()).collect();
-        let mm = after.parse().unwrap_or(0);
+        let mut hh = extract_clock_num(&s[..pos]).unwrap_or(hour_default);
+        let after: String = s[pos..].chars().skip(1).collect();
+        let mm = extract_clock_num_prefix(&after).unwrap_or(0);
         if hh <= 6 && (s.contains("下午") || s.contains("晚上") || s.contains("今晚")) {
             hh += 12;
         }

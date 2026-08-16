@@ -54,3 +54,20 @@ fn relative_with_chinese_numerals() {
     assert_eq!(parse_due("两小时后", base), base.checked_add_signed(chrono::Duration::hours(2)));
     assert_eq!(parse_due("三天后", base), base.checked_add_signed(chrono::Duration::days(3)));
 }
+
+#[test]
+fn relative_without_clock_character() {
+    use chrono::NaiveDateTime;
+    let now = NaiveDateTime::parse_from_str("2026-08-16 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    assert_eq!(smart_bc::timeparse::parse_due("一分", now).unwrap(), now + chrono::Duration::minutes(1));
+    assert_eq!(smart_bc::timeparse::parse_due("一分后", now).unwrap(), now + chrono::Duration::minutes(1));
+    assert_eq!(smart_bc::timeparse::parse_due("好的，什么时候提醒你喝水？一分钟", now).unwrap(), now + chrono::Duration::minutes(1));
+}
+
+#[test]
+fn clock_minutes_not_treated_as_relative() {
+    use chrono::NaiveDateTime;
+    let now = NaiveDateTime::parse_from_str("2026-08-16 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    // "下午三点五分" 应解析为钟点 15:05，而非 5 分钟
+    assert_eq!(smart_bc::timeparse::parse_due("下午三点五分", now).unwrap(), now.date().and_hms_opt(15, 5, 0).unwrap());
+}
