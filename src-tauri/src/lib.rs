@@ -76,7 +76,9 @@ pub fn run() {
         Arc::new(llm::client::DeepSeekClient::new(&api_key))
             as Arc<dyn llm::provider::LlmProvider + Send + Sync>
     ));
-    let model_path = asr::model::model_path(&data_dir);
+    let cfg = config::load_config(&data_dir);
+    let model_filename = asr::model::asr_model_filename(&cfg.asr_model);
+    let model_path = data_dir.join("models").join(model_filename);
     let transcriber = if model_path.exists() {
         match asr::whisper::Transcriber::new(&model_path) {
             Ok(t) => Some(t),
@@ -154,6 +156,7 @@ pub fn run() {
             commands::settings::get_config,
             commands::settings::save_input_device,
             commands::settings::save_reply_mode,
+            commands::settings::save_asr_model,
             commands::settings::delete_conversation,
             commands::settings::clear_all_data,
             commands::settings::export_all,

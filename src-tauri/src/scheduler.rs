@@ -33,6 +33,20 @@ pub fn mark_notified(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     Ok(())
 }
 
+fn friendly_due(due_at: &str) -> String {
+    let Ok(dt) = NaiveDateTime::parse_from_str(due_at, "%Y-%m-%d %H:%M:%S") else {
+        return due_at.to_string();
+    };
+    let now = chrono::Local::now().naive_local();
+    if dt.date() == now.date() {
+        dt.format("%H:%M").to_string()
+    } else if dt.date() == now.date().succ_opt().unwrap_or(now.date()) {
+        format!("明天{}", dt.format("%H:%M"))
+    } else {
+        dt.format("%m月%d日 %H:%M").to_string()
+    }
+}
+
 pub fn spawn(
     conn: Arc<Mutex<Connection>>,
     app: AppHandle,
@@ -67,7 +81,8 @@ fn sync_due(conn: &Arc<Mutex<Connection>>, app: &AppHandle, data_dir: &std::path
     for r in due {
         let cfg = crate::config::load_config(data_dir);
         let content = crate::memory::extract::clean_reminder_content(&r.content);
-        crate::voice::reply::deliver_reply(app, data_dir, &cfg.reply_mode, format!("到时间了，该{}了", content));
+        let due_txt = r.due_at.as_deref().map(friendly_due).unwrap_or_default();
+        crate::voice::reply::deliver_reply(app, data_dir, &cfg.reply_mode, format!("补发提醒：{}，原定{}", content, due_txt));
         PENDING_REMINDER_ID.store(r.id, std::sync::atomic::Ordering::SeqCst);
         if let Ok(guard) = conn.lock() {
             let _ = mark_notified(&guard, r.id);

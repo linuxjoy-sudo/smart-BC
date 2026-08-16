@@ -1,6 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static TTS_PLAYING: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
+static TTS_QUEUE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn tts_playing() -> bool {
     TTS_PLAYING.load(Ordering::Relaxed)
@@ -11,8 +13,10 @@ pub fn speak_async(data_dir: &std::path::Path, text: String) {
     use crate::voice::log::{log_error, log_line};
     use std::time::{Duration, Instant};
     let dir = data_dir.to_path_buf();
-    TTS_PLAYING.store(true, Ordering::Relaxed);
     std::thread::spawn(move || {
+        // 串行队列：多条播报依次播放，避免叠加（如重启后补发多条过期提醒）
+        let _queue = TTS_QUEUE.lock().unwrap();
+        TTS_PLAYING.store(true, Ordering::Relaxed);
         match tts::Tts::new(tts::Backends::WinRt) {
             Ok(mut tts) => {
                 if let Ok(Some(v)) = tts.voice() {

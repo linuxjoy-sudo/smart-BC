@@ -1,6 +1,11 @@
-/// 线性插值重采样到 16kHz 单声道（whisper 要求 16kHz f32 单声道）。
-/// 相比简单抽点，插值避免 48k→16k 混叠（aliasing），保留更多语音高频信息。
+/// 高质量重采样到 16kHz 单声道（whisper 要求 16kHz f32 单声道）。
+/// 使用 rubato sinc 插值（BlackmanHarris 窗），比线性插值保留更多高频信息，改善识别。
 pub fn to_mono_f16k(sample_rate: u32, samples: &[f32]) -> Vec<f32> {
+    use rubato::audioadapter_buffers::owned::InterleavedOwned;
+    use rubato::{
+        Async, FixedAsync, Resampler, SincInterpolationParameters, SincInterpolationType,
+        WindowFunction,
+    };
     const TARGET: f64 = 16000.0;
     if sample_rate == 0 {
         return Vec::new();
@@ -8,16 +13,26 @@ pub fn to_mono_f16k(sample_rate: u32, samples: &[f32]) -> Vec<f32> {
     if (sample_rate as f64 - TARGET).abs() < 1.0 {
         return samples.to_vec();
     }
-    let ratio = sample_rate as f64 / TARGET;
-    let out_len = (samples.len() as f64 / ratio) as usize;
-    let mut out = Vec::with_capacity(out_len);
-    for i in 0..out_len {
-        let src = i as f64 * ratio;
-        let s0 = src.floor() as usize;
-        let frac = (src - s0 as f64) as f32;
-        let a = samples.get(s0).copied().unwrap_or(0.0);
-        let b = samples.get(s0 + 1).copied().unwrap_or(a);
-        out.push(a + (b - a) * frac);
+    let ratio = TARGET / sample_rate as f64;
+    let params = SincInterpolationParameters {
+        sinc_len: 128,
+        f_cutoff: 0.95,
+        interpolation: SincInterpolationType::Linear,
+        oversampling_factor: 256,
+        window: WindowFunction::BlackmanHarris2,
+    };
+    let chunk = samples.len().max(1);
+    let mut resampler =
+        match Async::<f32>::new_sinc(ratio, 2.0, &params, chunk, 1, FixedAsync::Input) {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+    let input = match InterleavedOwned::<f32>::new_from(samples.to_vec(), 1, chunk) {
+        Ok(i) => i,
+        Err(_) => return Vec::new(),
+    };
+    match resampler.process(&input, 0, None) {
+        Ok(out) => out.take_data(),
+        Err(_) => Vec::new(),
     }
-    out
 }

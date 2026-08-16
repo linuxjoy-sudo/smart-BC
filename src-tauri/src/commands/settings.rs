@@ -50,6 +50,25 @@ pub fn save_reply_mode(state: tauri::State<'_, AppState>, mode: String) -> Resul
 }
 
 #[tauri::command]
+pub fn save_asr_model(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+    model: String,
+) -> Result<String, String> {
+    let mut cfg = crate::config::load_config(&state.data_dir);
+    cfg.asr_model = model;
+    save_config(&state.data_dir, &cfg)?;
+    let filename = crate::asr::model::asr_model_filename(&cfg.asr_model);
+    let path = state.data_dir.join("models").join(filename);
+    let new_t = crate::asr::whisper::Transcriber::new(&path).ok();
+    *state.transcriber.lock().unwrap() = new_t;
+    if cfg.voice_assistant_enabled {
+        crate::commands::voice::restart_listener(&app, state.inner())?;
+    }
+    Ok(format!("ASR 模型已切换为 {}", filename))
+}
+
+#[tauri::command]
 pub fn export_dir(state: tauri::State<'_, AppState>) -> Result<String, String> {
     Ok(state.data_dir.to_string_lossy().to_string())
 }

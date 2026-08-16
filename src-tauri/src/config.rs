@@ -15,6 +15,8 @@ pub struct Config {
     pub listen_window_secs: u32,
     #[serde(default)]
     pub wake_model: String,
+    #[serde(default)]
+    pub asr_model: String,
     #[serde(default = "default_reply_mode")]
     pub reply_mode: String,
 }
@@ -32,6 +34,7 @@ impl Default for Config {
             wake_word: default_wake_word(),
             listen_window_secs: default_listen_window(),
             wake_model: String::new(),
+            asr_model: String::new(),
             reply_mode: default_reply_mode(),
         }
     }
