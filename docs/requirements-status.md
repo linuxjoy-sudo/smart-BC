@@ -47,7 +47,7 @@
 | 15 | README 功能/用法文档 | ✅ 完成 | `854028a` | |
 | 16 | GitHub 私有仓库推送 | ✅ 完成 | — | https://github.com/linuxjoy-sudo/smart-BC（后改为公开） |
 | 17 | CI 流水线（GitHub Actions：快速回归 voice_chain + 全量 + 构建） | ✅ 完成 | `a7214ef` `29d1add` `91b7815` `ff98a0d` | 3 Job 全绿验证（快速回归/全量+clippy/Windows 构建）；设计见 [ci-pipeline-design.md](ci-pipeline-design.md) |
-| 18 | 方案 B：离线录音→ASR→全链路测试（voice_chain_test） | ⬜ 待实施 | — | CI Phase 1，模型下载已就绪（base 已上传，small 待补） |
+| 18 | 方案 B：离线录音→ASR→全链路测试（voice_chain_test） | ✅ 完成 | `3a5344c` | base 模型 + TTS fixtures（wake.wav/reminder.wav）真实 ASR 转写→唤醒断言→process_transcript；CI Job1 自动运行验证 |
 | 19 | 方案 D1：AudioFeed 抽象 + 进程内状态机测试（dialog_loop_test） | ⬜ 待实施 | — | CI Phase 2 |
 | 20 | 方案 C：VB-CABLE 开发机 E2E 冒烟脚本 | ⬜ 待实施 | — | CI Phase 3，不进 CI |
 
