@@ -94,7 +94,17 @@ pub fn parse_system_command(text: &str) -> SystemCommand {
         SystemCommand::MediaNext
     } else if t.contains("上一首") {
         SystemCommand::MediaPrev
-    } else if t.contains("播放") || t.contains("暂停") || t.contains("继续") {
+    } else if t.contains("播放")
+        || t.contains("放音乐")
+        || t.contains("放歌")
+        || t.contains("放首")
+        || t.contains("放点")
+        || t.contains("来点音乐")
+        || t.contains("来首")
+        || t.contains("听歌")
+        || t.contains("暂停")
+        || t.contains("继续")
+    {
         SystemCommand::MediaPlayPause
     } else if t.contains("音量") {
         // "调高音量" / "调低音量" / "音量调到50" / "音量50"

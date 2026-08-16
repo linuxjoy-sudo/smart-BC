@@ -68,6 +68,18 @@ fn parses_media_controls() {
 }
 
 #[test]
+fn parses_natural_media_phrases() {
+    assert!(is(parse_system_command("来点音乐"), "media_pp"));
+    assert!(is(parse_system_command("放首歌"), "media_pp"));
+    assert!(is(parse_system_command("放音乐"), "media_pp"));
+    assert!(is(parse_system_command("放点音乐"), "media_pp"));
+    assert!(is(parse_system_command("听歌"), "media_pp"));
+    assert!(is(parse_system_command("继续播放"), "media_pp"));
+    // 偏好表达不误触
+    assert!(is(parse_system_command("我喜欢听音乐"), "none"));
+}
+
+#[test]
 fn parses_open_url() {
     let cmd = parse_system_command("打开 bing.com");
     match cmd {
