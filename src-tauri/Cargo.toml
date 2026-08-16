@@ -33,6 +33,7 @@ tauri-plugin-notification = "2.3.3"
 reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls", "blocking"] }
 pinyin = "0.11.0"
 rubato = "2"
+opener = "0.8.5"
 
 [dev-dependencies]
 httpmock = "0.8.3"
@@ -46,3 +47,4 @@ tauri-plugin-notification = { path = "../vendor/tauri-plugin-notification" }
 
 [target."cfg(windows)".dependencies]
 tts = { version = "0.26.3", default-features = false }
+windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_Foundation"] }

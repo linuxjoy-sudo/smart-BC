@@ -1,9 +1,11 @@
+pub mod apps;
 pub mod commands;
 pub mod dialog;
 pub mod feed;
 pub mod listener;
 pub mod reply;
 pub mod tts;
+pub mod launch;
 pub mod log;
 pub mod vad;
 pub mod wake;

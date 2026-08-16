@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +20,8 @@ pub struct Config {
     pub asr_model: String,
     #[serde(default = "default_reply_mode")]
     pub reply_mode: String,
+    #[serde(default)]
+    pub app_commands: HashMap<String, String>,
 }
 
 fn default_reply_mode() -> String {
@@ -36,6 +39,7 @@ impl Default for Config {
             wake_model: String::new(),
             asr_model: String::new(),
             reply_mode: default_reply_mode(),
+            app_commands: HashMap::new(),
         }
     }
 }

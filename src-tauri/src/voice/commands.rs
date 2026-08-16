@@ -1,18 +1,41 @@
 use crate::app_state::AppState;
 use rusqlite::Connection;
 
+#[derive(Debug)]
 pub enum DeviceTarget {
     Internal,
     Headset,
 }
 
+#[derive(Debug)]
 pub enum SystemCommand {
     ListHistory,
     ListReminders,
     ListPeople,
     Status,
     SwitchDevice(DeviceTarget),
+    LaunchApp(String),
+    LaunchWith(String, String),
+    Search(String),
+    OpenUrl(String),
+    Volume(f32),
+    Mute(bool),
+    MediaPlayPause,
+    MediaNext,
+    MediaPrev,
     None,
+}
+
+fn strip_verb(t: &str) -> &str {
+    for v in ["打开", "启动", "开启", "运行", "帮我打开", "请打开"] {
+        if let Some(rest) = t.strip_prefix(v) {
+            let rest = rest.trim();
+            if !rest.is_empty() {
+                return rest;
+            }
+        }
+    }
+    t
 }
 
 pub fn parse_system_command(text: &str) -> SystemCommand {
@@ -41,10 +64,92 @@ pub fn parse_system_command(text: &str) -> SystemCommand {
         SystemCommand::SwitchDevice(DeviceTarget::Internal)
     } else if ["用耳机", "换耳机", "用蓝牙"].iter().any(|k| t.contains(k)) {
         SystemCommand::SwitchDevice(DeviceTarget::Headset)
+    } else if t.contains("用") && (t.contains("打开") || t.contains("开启")) {
+        // "用记事本打开 D:\笔记.txt"
+        let (app_part, target) = t.split_once("打开").or_else(|| t.split_once("开启")).unwrap_or(("", ""));
+        let app = app_part.trim_start_matches("用").trim().to_string();
+        let target = target.trim().to_string();
+        if !app.is_empty() && !target.is_empty() {
+            SystemCommand::LaunchWith(app, target)
+        } else {
+            SystemCommand::None
+        }
+    } else if t.starts_with("搜索") || t.starts_with("查一下") || t.starts_with("帮我搜") {
+        let q = strip_verb(t)
+            .trim_start_matches("搜索")
+            .trim_start_matches("查一下")
+            .trim_start_matches("帮我搜")
+            .trim()
+            .to_string();
+        if !q.is_empty() {
+            SystemCommand::Search(q)
+        } else {
+            SystemCommand::None
+        }
+    } else if t.contains("静音") {
+        SystemCommand::Mute(true)
+    } else if t.contains("取消静音") || t.contains("恢复声音") || t.contains("解除静音") {
+        SystemCommand::Mute(false)
+    } else if t.contains("下一首") {
+        SystemCommand::MediaNext
+    } else if t.contains("上一首") {
+        SystemCommand::MediaPrev
+    } else if t.contains("播放") || t.contains("暂停") || t.contains("继续") {
+        SystemCommand::MediaPlayPause
+    } else if t.contains("音量") {
+        // "调高音量" / "调低音量" / "音量调到50" / "音量50"
+        if t.contains("调高") || t.contains("大点") {
+            SystemCommand::Volume(0.1)
+        } else if t.contains("调低") || t.contains("小点") {
+            SystemCommand::Volume(-0.1)
+        } else if let Some(n) = extract_volume_number(t) {
+            SystemCommand::Volume(n)
+        } else {
+            SystemCommand::None
+        }
+    } else if t.contains("网址") || {
+        let u = strip_verb(t);
+        (["打开", "启动", "开启"].iter().any(|v| t.contains(v)))
+            && u.contains('.')
+            && !u.contains(' ')
+            && !u.contains('：')
+    } {
+        let url = strip_verb(t)
+            .trim_start_matches("网址")
+            .trim_start_matches("网站")
+            .trim()
+            .to_string();
+        if !url.is_empty() {
+            SystemCommand::OpenUrl(url)
+        } else {
+            SystemCommand::None
+        }
+    } else if ["打开", "启动", "开启", "运行"]
+        .iter()
+        .any(|v| t.starts_with(v) || t.starts_with(&format!("帮我{v}")) || t.starts_with(&format!("请{v}")))
+    {
+        let name = strip_verb(t).to_string();
+        if !name.is_empty() {
+            SystemCommand::LaunchApp(name)
+        } else {
+            SystemCommand::None
+        }
     } else {
         SystemCommand::None
     }
 }
+
+fn extract_volume_number(t: &str) -> Option<f32> {
+    // "音量调到50" / "音量50" / "五十"（中文数字）
+    let digits: String = t.chars().filter(|c| c.is_ascii_digit()).collect();
+    if let Ok(n) = digits.parse::<u32>() {
+        if (0..=100).contains(&n) {
+            return Some(n as f32 / 100.0);
+        }
+    }
+    None
+}
+
 
 pub fn execute_system_command<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
@@ -58,7 +163,116 @@ pub fn execute_system_command<R: tauri::Runtime>(
         SystemCommand::ListPeople => list_people(conn),
         SystemCommand::Status => status(state),
         SystemCommand::SwitchDevice(target) => switch_device(app, state, target),
+        SystemCommand::LaunchApp(name) => launch_app(state, &name),
+        SystemCommand::LaunchWith(app_name, target) => launch_with(state, &app_name, &target),
+        SystemCommand::Search(q) => crate::voice::launch::search(&q),
+        SystemCommand::OpenUrl(url) => crate::voice::launch::open_url(&url),
+        SystemCommand::Volume(scale) => set_volume_cmd(scale),
+        SystemCommand::Mute(mute) => set_mute_cmd(mute),
+        SystemCommand::MediaPlayPause => media_cmd("play_pause"),
+        SystemCommand::MediaNext => media_cmd("next"),
+        SystemCommand::MediaPrev => media_cmd("prev"),
         SystemCommand::None => String::new(),
+    }
+}
+
+fn launch_app(state: &AppState, name: &str) -> String {
+    let map = crate::voice::apps::app_map(&state.data_dir);
+    let Some(cmd) = crate::voice::apps::resolve_app(&map, name) else {
+        return format!("没有找到应用「{}」，可在设置里配置", name);
+    };
+    crate::voice::launch::launch_app(cmd)
+}
+
+fn launch_with(state: &AppState, app_name: &str, target: &str) -> String {
+    let map = crate::voice::apps::app_map(&state.data_dir);
+    let Some(cmd) = crate::voice::apps::resolve_app(&map, app_name) else {
+        return format!("没有找到应用「{}」，可在设置里配置", app_name);
+    };
+    crate::voice::launch::launch_with(cmd, target)
+}
+
+fn set_volume_cmd(scale: f32) -> String {
+    #[cfg(windows)]
+    {
+        if scale >= 0.0 && scale <= 1.0 {
+            match crate::voice::launch::win::set_volume(scale) {
+                Ok(_) => format!("音量已调到 {}", (scale * 100.0).round() as u32),
+                Err(e) => format!("音量调节失败：{e}"),
+            }
+        } else {
+            // 增量：读取当前音量 + scale
+            match current_volume() {
+                Some(cur) => {
+                    let target = (cur + scale).clamp(0.0, 1.0);
+                    match crate::voice::launch::win::set_volume(target) {
+                        Ok(_) => format!("音量已调到 {}", (target * 100.0).round() as u32),
+                        Err(e) => format!("音量调节失败：{e}"),
+                    }
+                }
+                None => "音量调节失败：无法读取当前音量".into(),
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = scale;
+        "音量调节仅在 Windows 可用".into()
+    }
+}
+
+#[cfg(windows)]
+fn current_volume() -> Option<f32> {
+    use windows::core::Interface;
+    use windows::Win32::Media::Audio::{eConsole, eRender, IMMDeviceEnumerator};
+    use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED};
+    const CLSID_MM_DEVICE_ENUMERATOR: windows::core::GUID =
+        windows::core::GUID::from_u128(0xbcde0395_e52f_467c_8e3d_c4579291692e);
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&CLSID_MM_DEVICE_ENUMERATOR, None, CLSCTX_ALL).ok()?;
+        let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+        let volume: IAudioEndpointVolume = device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None).ok()?;
+        let level = unsafe { volume.GetMasterVolumeLevelScalar().ok()? };
+        Some(level)
+    }
+}
+
+fn set_mute_cmd(mute: bool) -> String {
+    #[cfg(windows)]
+    {
+        match crate::voice::launch::win::set_mute(mute) {
+            Ok(_) => if mute { "已静音".into() } else { "已恢复声音".into() },
+            Err(e) => format!("静音操作失败：{e}"),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = mute;
+        "静音仅在 Windows 可用".into()
+    }
+}
+
+fn media_cmd(action: &str) -> String {
+    #[cfg(windows)]
+    {
+        match action {
+            "next" => crate::voice::launch::win::media_next(),
+            "prev" => crate::voice::launch::win::media_prev(),
+            _ => crate::voice::launch::win::media_play_pause(),
+        }
+        match action {
+            "next" => "已切换下一首".into(),
+            "prev" => "已切换上一首".into(),
+            _ => "已播放".into(),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = action;
+        "媒体控制仅在 Windows 可用".into()
     }
 }
 
