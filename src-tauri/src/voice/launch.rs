@@ -6,7 +6,19 @@ pub fn launch_app(command: &str) -> String {
     if command.starts_with("http://") || command.starts_with("https://") {
         return open_url(command);
     }
+    // 商店应用（AUMID，形如 "FamilyName!AppId"）：WindowsApps 目录受保护，用 shell:AppsFolder 激活
+    if command.contains('!') {
+        return launch_shell_app(command);
+    }
     match std::process::Command::new(command).spawn() {
+        Ok(_) => "好的，已打开".into(),
+        Err(e) => format!("打开失败：{e}"),
+    }
+}
+
+fn launch_shell_app(aumid: &str) -> String {
+    let target = format!("shell:AppsFolder\\{aumid}");
+    match std::process::Command::new("explorer.exe").arg(&target).spawn() {
         Ok(_) => "好的，已打开".into(),
         Err(e) => format!("打开失败：{e}"),
     }
