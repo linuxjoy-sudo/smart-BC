@@ -4273,6 +4273,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
+ "tempfile",
  "tokio",
  "tts",
  "whisper-rs",

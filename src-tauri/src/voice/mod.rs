@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod dialog;
+pub mod feed;
 pub mod listener;
 pub mod reply;
 pub mod tts;

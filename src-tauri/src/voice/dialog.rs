@@ -24,23 +24,20 @@ pub fn silence_exceeded(silence_secs: f64, limit_secs: f64) -> bool {
     silence_secs >= limit_secs
 }
 
-pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
-    use crate::commands::voice::voice_assistant_enabled;
+pub fn run_listener<R: tauri::Runtime>(app: tauri::AppHandle<R>, state: crate::app_state::AppState) {
     use crate::config::load_config;
     use crate::voice::listener::Listener;
     use crate::voice::log::{log_error, log_line};
-    use crate::voice::vad::{rms, EnergyVad};
-    use crate::voice::wake::contains_wake_word;
-    use std::time::{Duration, Instant};
+    use crate::voice::vad::rms;
+    use std::time::Duration;
     use tauri_plugin_notification::NotificationExt;
 
     let cfg = load_config(&state.data_dir);
-    let reply_mode = cfg.reply_mode.clone();
-    let wake_word = cfg.wake_word.clone();
-    let window = Duration::from_secs(cfg.listen_window_secs.max(1) as u64);
     let input_device = cfg.input_device;
+    let window = Duration::from_secs(cfg.listen_window_secs.max(1) as u64);
     log_line(&state.data_dir, &format!(
-        "run_listener 启动: wake_word={wake_word:?} window={}s input_device={input_device:?}",
+        "run_listener 启动: wake_word={:?} window={}s input_device={input_device:?}",
+        cfg.wake_word,
         window.as_secs()
     ));
     let listener = match Listener::start(input_device, 5) {
@@ -79,14 +76,37 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
             log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
         }
     }
+    let mut feed = crate::voice::feed::CpalFeed { listener };
+    let sink = crate::voice::reply::AppSink { app: &app, data_dir: &state.data_dir };
+    run_loop(&app, &state, &mut feed, &sink);
+}
+
+/// 核心对话循环：从 feed 取音频、驱动状态机（唤醒→聆听→断句→转写→处理）。
+/// 独立于真实麦克风（CpalFeed）与真实播报（AppSink），可注入 WavFeed/MockSink 测试。
+pub fn run_loop<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    state: &crate::app_state::AppState,
+    feed: &mut dyn crate::voice::feed::AudioFeed,
+    sink: &dyn crate::voice::reply::DialogSink,
+) {
+    use crate::commands::voice::voice_assistant_enabled;
+    use crate::config::load_config;
+    use crate::voice::log::{log_error, log_line};
+    use crate::voice::vad::{rms, EnergyVad};
+    use crate::voice::wake::contains_wake_word;
+    use std::time::{Duration, Instant};
+
+    let cfg = load_config(&state.data_dir);
+    let reply_mode = cfg.reply_mode.clone();
+    let wake_word = cfg.wake_word.clone();
+    let window = Duration::from_secs(cfg.listen_window_secs.max(1) as u64);
+
     let transcriber = state.transcriber.lock().unwrap().clone();
     let transcriber = match transcriber {
         Some(t) => t,
         None => {
             log_error(&state.data_dir, "模型未加载，语音助手不可用");
-            if let Err(ne) = app.notification().builder().title("SmartBC 语音助手").body("模型未加载，语音助手不可用").show() {
-                log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
-            }
+            sink.notify_error("模型未加载，语音助手不可用");
             return;
         }
     };
@@ -111,8 +131,8 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
             return;
         }
     };
-    let mut vad = EnergyVad::new(0.02, (listener.sample_rate / 100).max(1) as usize);
-    let sr = listener.sample_rate as usize;
+    let mut vad = EnergyVad::new(0.02, (feed.sample_rate() / 100).max(1) as usize);
+    let sr = feed.sample_rate() as usize;
     let mut buf: Vec<f32> = Vec::new();
     let mut state_machine = DialogState::Idle;
     let mut active_start = Instant::now();
@@ -125,12 +145,21 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
     loop {
         if !voice_assistant_enabled(&state.data_dir) {
             log_line(&state.data_dir, "已禁用 → run_listener 退出");
-            let _ = listener.stop();
+            
             return;
         }
-        let snap = listener.buffer.lock().unwrap().snapshot();
-        if snap.is_empty() { std::thread::sleep(Duration::from_millis(100)); continue; }
-        if crate::voice::tts::tts_playing() {
+        let snap = match feed.next_samples(sr / 20) {
+            Some(s) => s,
+            None => {
+                log_line(&state.data_dir, "音频流结束 → run_loop 退出");
+                return;
+            }
+        };
+        if snap.is_empty() {
+            std::thread::sleep(Duration::from_millis(100));
+            continue;
+        }
+        if sink.tts_playing() {
             buf.clear();
             silence_since = Instant::now();
             std::thread::sleep(Duration::from_millis(50));
@@ -138,7 +167,6 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
         }
         let speaking = vad.feed(&snap);
         buf.extend_from_slice(&snap);
-        listener.buffer.lock().unwrap().clear();
         let level = rms(&snap);
 
         if last_vad_log.elapsed().as_secs_f64() >= 1.0 {
@@ -177,7 +205,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                         } else {
                             log_line(&state.data_dir, &format!("唤醒转写: chunk_ms={} 开始", chunk.len() * 1000 / sr));
                             let t0 = Instant::now();
-                            match wake_transcriber.transcribe_with_state(&mut wake_state, listener.sample_rate, &chunk) {
+                            match wake_transcriber.transcribe_with_state(&mut wake_state, feed.sample_rate(), &chunk) {
                                 Ok(t) => {
                                     let matched = contains_wake_word(&t, &wake_word);
                                     log_line(&state.data_dir, &format!("唤醒转写文本: {t:?} matched={matched} (耗时 {:?})", t0.elapsed()));
@@ -186,7 +214,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                         active_start = Instant::now();
                                         silence_since = Instant::now();
                                         log_line(&state.data_dir, "唤醒命中 → Active，发送\"在呢，请说\"回复");
-                                        crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
+                                        sink.deliver(&reply_mode, "在呢，请说".into());
                                     }
                                 }
                                 Err(e) => log_error(&state.data_dir, &format!("唤醒转写失败: {e} (耗时 {:?})", t0.elapsed())),
@@ -208,7 +236,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             state_machine = transition(state_machine, DialogEvent::SentenceEnd);
                             let t0 = Instant::now();
                             // 先用 base 快速检测唤醒词，命中则直接重置窗口（避免 small 慢转写）
-                            let wake_text = wake_transcriber.transcribe_with_state(&mut wake_state, listener.sample_rate, &sentence);
+                            let wake_text = wake_transcriber.transcribe_with_state(&mut wake_state, feed.sample_rate(), &sentence);
                             let re_wake = match &wake_text {
                                 Ok(t) => {
                                     contains_wake_word(t, &wake_word)
@@ -219,9 +247,9 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                             if re_wake {
                                 log_line(&state.data_dir, &format!("重复唤醒词（base 快速检测，耗时 {:?}）→ 重置聆听窗口", t0.elapsed()));
                                 state_machine = transition(state_machine, DialogEvent::ProcessedOk);
-                                crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
+                                sink.deliver(&reply_mode, "在呢，请说".into());
                             } else {
-                                let transcribed = transcriber.transcribe_with_state(&mut sentence_state, listener.sample_rate, &sentence);
+                                let transcribed = transcriber.transcribe_with_state(&mut sentence_state, feed.sample_rate(), &sentence);
                                 log_line(&state.data_dir, &format!("断句转写完成 (耗时 {:?})", t0.elapsed()));
                                 let re_wake_small = match &transcribed {
                                     Ok(t) => {
@@ -233,7 +261,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                 if re_wake_small {
                                     log_line(&state.data_dir, "重复唤醒词（small 二次检测命中）→ 重置聆听窗口");
                                     state_machine = transition(state_machine, DialogEvent::ProcessedOk);
-                                    crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "在呢，请说".into());
+                                    sink.deliver(&reply_mode, "在呢，请说".into());
                                 } else if let Some(rid) = {
                                     let v = crate::scheduler::PENDING_REMINDER_ID.load(std::sync::atomic::Ordering::SeqCst);
                                     (v > 0).then_some(v)
@@ -248,7 +276,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                             let _ = crate::db::reminders::set_status(&conn, rid, "done");
                                             crate::scheduler::PENDING_REMINDER_ID.store(0, std::sync::atomic::Ordering::SeqCst);
                                             log_line(&state.data_dir, &format!("提醒 {rid} 语音完成"));
-                                            crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "好的，已帮你完成".into());
+                                            sink.deliver(&reply_mode, "好的，已帮你完成".into());
                                         }
                                         ReminderResponse::Deferred(dt) => {
                                             let due = dt.format("%Y-%m-%d %H:%M:%S").to_string();
@@ -257,14 +285,14 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                                 Ok(_) => {
                                                     crate::scheduler::PENDING_REMINDER_ID.store(0, std::sync::atomic::Ordering::SeqCst);
                                                     log_line(&state.data_dir, &format!("提醒 {rid} 延后到 {due}"));
-                                                    crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, format!("好的，延后到{}", friendly_time(dt)));
+                                                    sink.deliver(&reply_mode, format!("好的，延后到{}", friendly_time(dt)));
                                                 }
                                                 Err(e) => log_error(&state.data_dir, &format!("延后失败: {e}")),
                                             }
                                         }
                                         ReminderResponse::Unknown => {
                                             log_line(&state.data_dir, "提醒响应未识别，提示指令");
-                                            crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "可以说\"完成\"或\"延后5分钟\"".into());
+                                            sink.deliver(&reply_mode, "可以说\"完成\"或\"延后5分钟\"".into());
                                         }
                                     }
                                     state_machine = transition(state_machine, DialogEvent::ProcessedOk);
@@ -283,7 +311,7 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                             match crate::db::reminders::update_due(&conn, id, &due) {
                                                 Ok(_) => {
                                                     log_line(&state.data_dir, &format!("语音补时间成功: {content} => {due}"));
-                                                    crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, format!("好的，{}提醒你{}", friendly_time(dt), content));
+                                                    sink.deliver(&reply_mode, format!("好的，{}提醒你{}", friendly_time(dt), content));
                                                 }
                                                 Err(e) => log_error(&state.data_dir, &format!("补时间失败: {e}")),
                                             }
@@ -292,10 +320,10 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                             if attempts < 2 {
                                                 log_line(&state.data_dir, &format!("补时间未解析，追问 {content}"));
                                                 pending_time = Some((id, content, attempts + 1));
-                                                crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, "没听清时间，请再说一次，比如'下午三点'".into());
+                                                sink.deliver(&reply_mode, "没听清时间，请再说一次，比如'下午三点'".into());
                                             } else {
                                                 log_line(&state.data_dir, &format!("补时间多次失败，放弃 {content}"));
-                                                crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, format!("暂时没设好时间，之后可以重新提醒我{}", content));
+                                                sink.deliver(&reply_mode, format!("暂时没设好时间，之后可以重新提醒我{}", content));
                                             }
                                         }
                                     }
@@ -307,10 +335,10 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                     };
                                     if !matches!(system_cmd, crate::voice::commands::SystemCommand::None) {
                                         let conn = state.conn.lock().unwrap();
-                                        let msg = crate::voice::commands::execute_system_command(&app, &state, &conn, system_cmd);
+                                        let msg = crate::voice::commands::execute_system_command(app, state, &conn, system_cmd);
                                         drop(conn);
                                         log_line(&state.data_dir, &format!("系统指令: {msg:?}"));
-                                        crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, msg);
+                                        sink.deliver(&reply_mode, msg);
                                         state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                     } else {
                                     let result = match transcribed {
@@ -335,14 +363,12 @@ pub fn run_listener(app: tauri::AppHandle, state: crate::app_state::AppState) {
                                             }
                                         };
                                         log_line(&state.data_dir, &format!("{label}: {message:?}"));
-                                        crate::voice::reply::deliver_reply(&app, &state.data_dir, &reply_mode, message);
+                                        sink.deliver(&reply_mode, message);
                                         state_machine = transition(state_machine, DialogEvent::ProcessedOk);
                                     }
                                         Err(e) => {
                                             log_error(&state.data_dir, &format!("处理失败: {e}"));
-                                            if let Err(ne) = app.notification().builder().title("SmartBC").body(format!("查询失败：{e}")).show() {
-                                                log_error(&state.data_dir, &format!("通知发送失败: {ne}"));
-                                            }
+                                            sink.notify_error(&format!("查询失败：{e}"));
                                             state_machine = transition(state_machine, DialogEvent::ProcessedErr);
                                         }
                                     }

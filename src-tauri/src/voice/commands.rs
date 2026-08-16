@@ -46,8 +46,8 @@ pub fn parse_system_command(text: &str) -> SystemCommand {
     }
 }
 
-pub fn execute_system_command(
-    app: &tauri::AppHandle,
+pub fn execute_system_command<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
     state: &AppState,
     conn: &Connection,
     cmd: SystemCommand,
@@ -126,7 +126,7 @@ fn state_config(state: &AppState) -> crate::config::Config {
     crate::config::load_config(&state.data_dir)
 }
 
-fn switch_device(app: &tauri::AppHandle, state: &AppState, target: DeviceTarget) -> String {
+fn switch_device<R: tauri::Runtime>(app: &tauri::AppHandle<R>, state: &AppState, target: DeviceTarget) -> String {
     let devices = match crate::audio::recorder::list_input_devices() {
         Ok(d) => d,
         Err(_) => return "获取设备列表失败".into(),
