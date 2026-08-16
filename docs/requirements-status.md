@@ -48,9 +48,9 @@
 | 16 | GitHub 私有仓库推送 | ✅ 完成 | — | https://github.com/linuxjoy-sudo/smart-BC（后改为公开） |
 | 17 | CI 流水线（GitHub Actions：快速回归 voice_chain + 全量 + 构建） | ✅ 完成 | `a7214ef` `29d1add` `91b7815` `ff98a0d` | 3 Job 全绿验证（快速回归/全量+clippy/Windows 构建）；设计见 [ci-pipeline-design.md](ci-pipeline-design.md) |
 | 18 | 方案 B：离线录音→ASR→全链路测试（voice_chain_test） | ✅ 完成 | `3a5344c` | base 模型 + TTS fixtures（wake.wav/reminder.wav）真实 ASR 转写→唤醒断言→process_transcript；CI Job1 自动运行验证 |
-| 19 | 方案 D1：AudioFeed 抽象 + 进程内状态机测试（dialog_loop_test） | ⬜ 待实施 | — | CI Phase 2，不受去 GUI 化影响 |
+| 19 | 方案 D1：AudioFeed/DialogSink 抽象 + 进程内状态机测试（dialog_loop_test） | ✅ 完成 | `6bb1fbf` | run_loop 可注入 WavFeed/MockSink；2 项测试真实 ASR（唤醒触发/非唤醒保持 Idle）；CI Job1 启用 |
 | 20 | 方案 C：VB-CABLE 开发机 E2E 冒烟脚本 | ⬜ 待实施 | — | CI Phase 3，不进 CI |
-| 21 | 去 GUI 化（方案 A+C）：主窗口默认隐藏 + 系统托盘（打开设置/切换语音/退出）+ 首次引导 + 语音系统指令（查历史/承诺/人脉/状态/切换设备） | 🔄 进行中 | `e4023c5` | 已部署待用户实测；剩余：托盘菜单状态动态化、开机自启 |
+| 21 | 去 GUI 化（方案 A+C）：主窗口默认隐藏 + 系统托盘 + 首次引导 + 语音系统指令 | ✅ 完成 | `e4023c5` | 用户确认完成 |
 | 22 | 提醒补发依次播报（TTS 串行队列 + 带原定时间文案） | ✅ 完成 | `bfde979` | 重启后多条过期提醒逐个播报不叠加 |
 | 23 | 转写质量提升：重采样升级（rubato sinc）+ ASR 模型可切换（small/medium） | ✅ 完成 | `bfde979` | medium 评估：真实录音从乱码→清晰语义；config.asr_model 切换（默认 small 保实时） |
 
