@@ -28,6 +28,8 @@ jobs:
 
       - name: Download whisper models from Releases
         if: steps.model-cache.outputs.cache-hit != 'true'
+        # Phase 0: 纯逻辑测试不依赖模型，下载失败不阻塞（Phase 1 voice_chain 实施后再强制）
+        continue-on-error: true
         run: bash scripts/download-models.sh
 
       - name: Restore cargo/target cache
