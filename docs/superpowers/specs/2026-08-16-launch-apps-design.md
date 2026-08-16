@@ -54,11 +54,26 @@
 
 ```json
 "app_commands": {
-  "网易云音乐": "C:\\Program Files\\...\\cloudmusic.exe"
+  "网易云音乐": "D:\\Software\\Netease\\cloudmusic.exe",
+  "QQ音乐": "C:\\Program Files\\Tencent\\QQMusic\\QQMusic.exe"
 }
 ```
 
 启动时合并：内置表 + config 覆盖/新增。
+
+### 配置能力（更新音乐播放器等）
+
+用户可通过编辑 config.json 的 `app_commands` 自定义/覆盖应用映射：
+
+| 场景 | 行为 |
+|---|---|
+| config 用**同名 key**（如"音乐"） | **覆盖**内置条目（如 wmplayer.exe → 网易云音乐） |
+| config 用**新名称**（如"网易云音乐"） | 内置表 + 新增，两者都可用 |
+| 不配置 | 用内置默认 |
+
+- **路径写法**：双反斜杠 `D:\\Software\\cloudmusic.exe` 或正斜杠 `D:/Software/cloudmusic.exe` 均可；含空格路径直接执行
+- **生效方式**：修改后**重启应用**（启动时加载合并映射表）
+- 播报提示：应用未注册时提示"可在设置里配置"（引导用户加 app_commands）
 
 ### 搜索
 
