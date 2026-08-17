@@ -53,7 +53,7 @@
 | 21 | 去 GUI 化（方案 A+C）：主窗口默认隐藏 + 系统托盘 + 首次引导 + 语音系统指令 | ✅ 完成 | `e4023c5` | 用户确认完成 |
 | 22 | 提醒补发依次播报（TTS 串行队列 + 带原定时间文案） | ✅ 完成 | `bfde979` | 重启后多条过期提醒逐个播报不叠加 |
 | 23 | 转写质量提升：重采样升级（rubato sinc）+ ASR 模型可切换（small/medium） | ✅ 完成 | `bfde979` | medium 评估：真实录音从乱码→清晰语义；config.asr_model 切换（默认 small 保实时） |
-| 24 | 语音调用系统应用（B 级：启动应用/URL/搜索 + 音量/媒体键） | ✅ 完成 | `7e8d6b2` | 白名单映射 + config app_commands 可覆盖；音量 Core Audio/媒体键 SendInput；12 项解析测试；设计见 specs/2026-08-16-launch-apps-design.md |
+| 24 | 语音调用系统应用（B 级：启动应用/URL/搜索 + 音量/媒体键 + 音乐自动播放） | ✅ 完成 | `7e8d6b2` `823eda6` | 音乐播放：桌面版网易云+媒体键（商店版媒体键无效/orpheus 仅唤起不播放已弃用）；SendInput 媒体键 KEYEVENTF_SCANCODE bug 已修 |
 
 ### 已实测验证
 - ✅ 唤醒功能正常（多次实测）
