@@ -205,18 +205,15 @@ fn launch_with(state: &AppState, app_name: &str, target: &str) -> String {
 }
 
 fn play_music(state: &AppState) -> String {
-    // 通过音乐播放协议直接唤起播放（orpheus://radio 私人 FM 打开即播），
-    // 不再依赖"启动 + 媒体键"（媒体键无法让无曲目的播放器开始播放）
-    let cfg = crate::config::load_config(&state.data_dir);
-    let source = if cfg.music_play_source.is_empty() {
-        "orpheus://radio"
-    } else {
-        cfg.music_play_source.as_str()
-    };
-    match opener::open(source) {
-        Ok(_) => "好的，已开始播放".into(),
-        Err(e) => format!("打开失败：{e}"),
+    // 启动音乐播放器（桌面版网易云），等就绪后发播放键——
+    // 桌面版有会话记忆，媒体键可触发续播（商店版媒体键无效已弃用）
+    let launched = launch_app(state, "音乐");
+    if !launched.starts_with("好的") {
+        return launched;
     }
+    std::thread::sleep(std::time::Duration::from_millis(3000));
+    let _ = media_cmd("play_pause");
+    "好的，已开始播放".into()
 }
 
 fn set_volume_cmd(scale: f32) -> String {
