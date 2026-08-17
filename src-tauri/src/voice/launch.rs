@@ -141,20 +141,34 @@ pub mod win {
     }
 
     fn send_media_key(vk: u16) {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VIRTUAL_KEY};
+        // 媒体键是虚拟键（无扫描码）：用 wVk + flags=0（不能 KEYEVENTF_SCANCODE，会忽略 wVk），发 down+up
         unsafe {
-            let input = INPUT {
-                r#type: windows::Win32::UI::Input::KeyboardAndMouse::INPUT_KEYBOARD,
+            let down = INPUT {
+                r#type: INPUT_KEYBOARD,
                 Anonymous: INPUT_0 {
                     ki: KEYBDINPUT {
-                        wVk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(vk),
+                        wVk: VIRTUAL_KEY(vk),
                         wScan: 0,
-                        dwFlags: KEYEVENTF_SCANCODE,
+                        dwFlags: KEYBD_EVENT_FLAGS(0),
                         time: 0,
                         dwExtraInfo: 0,
                     },
                 },
             };
-            SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+            let up = INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VIRTUAL_KEY(vk),
+                        wScan: 0,
+                        dwFlags: KEYBD_EVENT_FLAGS(KEYEVENTF_KEYUP.0),
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            };
+            SendInput(&[down, up], std::mem::size_of::<INPUT>() as i32);
         }
     }
 
@@ -168,25 +182,5 @@ pub mod win {
 
     pub fn media_prev() {
         send_media_key(VK_MEDIA_PREV_TRACK.0 as u16);
-    }
-
-    #[allow(dead_code)]
-    fn volume_key(up: bool) {
-        let vk = if up { VK_VOLUME_UP.0 } else { VK_VOLUME_DOWN.0 } as u16;
-        unsafe {
-            let input = INPUT {
-                r#type: windows::Win32::UI::Input::KeyboardAndMouse::INPUT_KEYBOARD,
-                Anonymous: INPUT_0 {
-                    ki: KEYBDINPUT {
-                        wVk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY(vk),
-                        wScan: 0,
-                        dwFlags: KEYEVENTF_SCANCODE,
-                        time: 0,
-                        dwExtraInfo: 0,
-                    },
-                },
-            };
-            SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
-        }
     }
 }
