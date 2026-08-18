@@ -34,6 +34,8 @@ reqwest = { version = "0.13.4", default-features = false, features = ["json", "r
 pinyin = "0.11.0"
 rubato = "2"
 opener = "0.8.5"
+sherpa-onnx = "1.13.5"
+sherpa-onnx-sys = "1.13.5"
 
 [dev-dependencies]
 httpmock = "0.8.3"
