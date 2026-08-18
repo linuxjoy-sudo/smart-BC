@@ -49,11 +49,14 @@
 - 输出：消除回声后的纯人声 → VAD/打断检测
 - 前提：TTS 必须自渲染 PCM（见下）
 
-### 3. TTS 改造（关键前置）
+### 3. TTS 改造（Qwen3-TTS，首选）
 
-- WinRT `SpeechSynthesizer` 输出到流（SpeechSynthesisStream）→ 读取 PCM
-- 自己播放（cpal 输出设备，替代 MediaPlayer）
-- 播放音频同时送 AEC 参考信号
+- **Qwen3-TTS（Rust crate，candle 推理）**：
+  - 流式合成（`synthesize_streaming` chunk 输出）——边说边播，与流式 ASR 对称
+  - 完全可控（播放循环可中断、自渲染 PCM 可直接送 AEC 参考）
+  - 中文支持、9 预设声音、声音克隆（Base 模型）
+  - 模型：0.6B（CPU 可跑）/ 1.7B（高质量）；`qwen3-tts = { version = "0.1" }`
+- **WinRT TTS 保留为 fallback**（模型未下载/低资源模式）
 - **可中断**：播放循环检查打断标志 → 停止播放
 
 ### 4. 对话状态机
@@ -82,16 +85,19 @@
 | 依赖 | 用途 |
 |---|---|
 | `sherpa-onnx` | 流式 ASR（paraformer 模型） |
+| `qwen3-tts`（candle） | 流式 TTS（首选，可中断+送 AEC 参考） |
+| WinRT tts crate | TTS fallback（模型未下载/低资源） |
 | `webrtc-audio-processing` | AEC 回声消除 |
 | cpal 输出 | TTS 自播放 |
-| tts crate（WinRT 扩展） | 流式 TTS 渲染 |
 
 ## 风险与非目标
 
 - 延迟目标：词条 200-500ms，完整句 1-2s（优于 whisper 2-5s）
 - 非目标：多说话人分离、背景噪声抑制（AEC 含基本 NS）
 - 模型下载 ~300MB（hf-mirror 可拉）
-- TTS 自渲染改造可能影响当前播放质量（需验证）
+- Qwen3-TTS 0.6B CPU 推理延迟需评估（首 chunk 响应时间）
+- Qwen3-TTS 模型下载 ~1-2GB（hf-mirror）
+- WinRT fallback 保证模型缺失时播报可用
 
 ## 测试策略
 
@@ -103,11 +109,11 @@
 ## 实施阶段（建议）
 
 1. **Phase 1**：sherpa-onnx 接入（流式识别替代断句转写）+ 模型下载评估
-2. **Phase 2**：TTS 自渲染（流输出 + cpal 播放 + 可中断）
+2. **Phase 2**：Qwen3-TTS 接入（流式合成 + cpal 播放 + 可中断；WinRT 保留 fallback）
 3. **Phase 3**：WebRTC AEC 接入（打断检测）
 4. **Phase 4**：对话状态机（唤醒进入/免唤醒/静默退出）+ 全链路测试
 
 ## 非目标（后续候选）
 
-- 流式 TTS（当前 WinRT 分段播报，可打断）
+- Qwen3-TTS 声音克隆调优（Base 模型，后续）
 - 多设备/远场唤醒
